@@ -1,0 +1,18 @@
+[package]
+name = "cipher-suite"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib", "lib"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+pulp-wrapper = { git = "https://github.com/Zeegomo/pulp-wrapper" }
+asm-macros = { git = "https://github.com/Zeegomo/pulp-wrapper" }
+chacha20 = { git = "https://github.com/Zeegomo/stream-ciphers" }
+pulp_sdk_rust = { git = " https://github.com/Zeegomo/pulp-sdk-rust" }
+cty = "0.2"
+generic-array = "*"
+cipher = "0.4.2"
+chacha20_orig = { version = "*", package = "chacha20" }
