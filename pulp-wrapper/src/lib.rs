@@ -3,6 +3,7 @@
 #![feature(new_uninit)]
 extern crate alloc;
 
+use alloc::boxed::Box;
 use cipher::{KeyIvInit, StreamCipher, StreamCipherSeek, Unsigned};
 use core::{pin::Pin, ptr::NonNull};
 use pulp_sdk_rust::*;
@@ -34,26 +35,16 @@ pub struct PulpWrapper<const BUF_LEN: usize> {
     core_data: NonNull<CoreData<BUF_LEN>>,
 }
 
-#[derive(Clone, Copy)]
-pub enum SourceLocation {
-    L1,
-    L2,
-    Ram(NonNull<PiDevice>),
-}
-
 impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
     /// Initialize the wrapper and allocates necessary buffers in the cluster.
     /// This enables to reuse allocations across calls to [run].
     pub fn new(mut cluster: Cluster) -> Self {
         // Safety: C api will not move out of the returned ptr
         let device_ptr = unsafe { Pin::get_unchecked_mut(cluster.device_mut()) as *mut PiDevice };
+        let l1_alloc = ClusterAllocator::new(device_ptr);
         Self {
             cluster_buffer: <BufAlloc<BUF_LEN>>::new(&mut cluster),
-            // TODO: Maybeuninit?
-            core_data: NonNull::new(unsafe {
-                pi_cl_l1_malloc(device_ptr, core::mem::size_of::<CoreData<BUF_LEN>>() as i32)
-            } as *mut CoreData<BUF_LEN>)
-            .unwrap(),
+            core_data: NonNull::new(Box::leak(Box::new_in(CoreData::empty(), l1_alloc))).unwrap(),
             cluster,
         }
     }
@@ -78,8 +69,8 @@ impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
             iv.as_ptr(),
             loc,
         );
-        // Use ptr::write() not to drop possibly uninitialized memory
-        core::ptr::write(self.core_data.as_ptr(), data);
+
+        *self.core_data.as_mut() = data;
 
         pi_cl_team_fork(
             CORES,
@@ -150,11 +141,9 @@ impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
 impl<const BUF_LEN: usize> Drop for PulpWrapper<BUF_LEN> {
     fn drop(&mut self) {
         unsafe {
-            pi_cl_l1_free(
-                Pin::get_unchecked_mut(self.cluster.device_mut()) as *mut PiDevice,
-                self.core_data.as_ptr() as *mut cty::c_void,
-                core::mem::size_of::<CoreData<BUF_LEN>>() as i32,
-            );
+            let device_ptr = Pin::get_unchecked_mut(self.cluster.device_mut()) as *mut PiDevice;
+            let l1_alloc = ClusterAllocator::new(device_ptr);
+            let _ = Box::from_raw_in(self.core_data.as_mut(), l1_alloc);
         }
     }
 }
@@ -186,4 +175,22 @@ impl<const BUF_LEN: usize> CoreData<BUF_LEN> {
             loc,
         }
     }
+
+    fn empty() -> Self {
+        Self {
+            source: core::ptr::null_mut(),
+            len: 0,
+            l1_alloc: core::ptr::null(),
+            key: core::ptr::null(),
+            iv: core::ptr::null(),
+            loc: SourceLocation::L1,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum SourceLocation {
+    L1,
+    L2,
+    Ram(NonNull<PiDevice>),
 }
