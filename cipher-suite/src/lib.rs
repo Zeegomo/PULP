@@ -6,7 +6,6 @@ extern crate alloc;
 
 use crate::alloc::string::ToString;
 use alloc::boxed::Box;
-use chacha20::ChaCha20;
 use cipher::{IvSizeUser, KeySizeUser, Unsigned};
 use core::pin::Pin;
 use core::ptr::NonNull;
@@ -28,10 +27,24 @@ fn panic_handler(info: &PanicInfo) -> ! {
 
 #[repr(C)]
 pub enum Cipher {
+    ChaCha20Pulp,
     ChaCha20,
-    Rc4,
-    Rabbit,
+    Aes128Ctr,
 }
+
+macro_rules! extract_key_iv {
+    ($cipher:ty, $key:expr, $iv:expr) => {
+        {
+            let key = GenericArray::from_slice(core::slice::from_raw_parts($key, <$cipher as KeySizeUser>::KeySize::USIZE));
+            let iv = GenericArray::from_slice(core::slice::from_raw_parts($iv, <$cipher as IvSizeUser>::IvSize::USIZE));
+            (key, iv)
+        }
+    }
+}
+
+
+type Aes128Ctr = ctr::Ctr32LE<aes::Aes128>;
+const CLUSTER_L1_BUFFER_LEN: usize = 8192;
 
 /// Initialize the cluster wrapper in L2 memory
 ///
@@ -43,13 +56,13 @@ pub extern "C" fn cluster_init(cluster_loc: *mut *mut PiDevice) -> *mut cty::c_v
     unsafe {
         *cluster_loc = Pin::get_unchecked_mut(cluster.device_mut());
     }
-    let wrapper = Box::new_in(<PulpWrapper>::new(cluster), pulp_sdk_rust::L2Allocator);
+    let wrapper = Box::new_in(<PulpWrapper<CLUSTER_L1_BUFFER_LEN>>::new(cluster), pulp_sdk_rust::L2Allocator);
     Box::into_raw(wrapper) as *mut cty::c_void
 }
 
 /// Encrypt / decrypt using the provided cipher
 ///
-/// Safety:
+/// # Safety:
 /// * data must be valid to read / write for len bytes and must be in L2 memory
 /// * key must be valid to read for: 32 bytes
 /// * iv must be valid to read for 12 bytes
@@ -64,25 +77,26 @@ pub unsafe extern "C" fn encrypt(
     ram_device: *mut PiDevice,
     cipher: Cipher,
 ) {
-    let wrapper = (wrapper as *mut PulpWrapper).as_mut().unwrap();
+    let wrapper = (wrapper as *mut PulpWrapper<CLUSTER_L1_BUFFER_LEN>).as_mut().unwrap();
     let data = core::slice::from_raw_parts_mut(data, len);
     let location = if let Some(device) = NonNull::new(ram_device) {
         SourceLocation::Ram(device)
     } else {
         SourceLocation::L2
     };
-    let (key_size, iv_size) = match cipher {
-        Cipher::ChaCha20 => (
-            <ChaCha20 as KeySizeUser>::KeySize::USIZE,
-            <ChaCha20 as IvSizeUser>::IvSize::USIZE,
-        ),
-        _ => unimplemented!(),
-    };
-    let key = GenericArray::from_slice(core::slice::from_raw_parts(key, key_size));
-    let iv = GenericArray::from_slice(core::slice::from_raw_parts(iv, iv_size));
     match cipher {
-        Cipher::ChaCha20 => wrapper.run::<chacha20::ChaCha20>(data, key, iv, location),
-        _ => unimplemented!(),
+        Cipher::ChaCha20 => {
+            let (key, iv) = extract_key_iv!(chacha20_orig::ChaCha20, key, iv);
+            wrapper.run::<chacha20_orig::ChaCha20>(data, key, iv, location)
+        },
+        Cipher::ChaCha20Pulp => {
+            let (key, iv) = extract_key_iv!(chacha20::ChaCha20, key, iv);
+            wrapper.run::<chacha20::ChaCha20>(data, key, iv, location)
+        },
+        Cipher::Aes128Ctr => {
+            let (key, iv) = extract_key_iv!(Aes128Ctr, key, iv);
+            wrapper.run::<Aes128Ctr>(data, key, iv, location)
+        }
     }
 }
 
@@ -96,7 +110,7 @@ pub unsafe extern "C" fn cluster_close(wrapper: *mut cty::c_void) {
 
 /// Encrypt data serially using the unmodified version of this library
 ///
-/// Safety:
+/// # Safety:
 /// * data must be valid to read / write for len bytes and must be in L2 memory
 /// * key must be valid to read for 32 bytes
 /// * iv must be valid to read for 12 bytes

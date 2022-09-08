@@ -16,3 +16,5 @@ cty = "0.2"
 generic-array = "*"
 cipher = "0.4.2"
 chacha20_orig = { version = "*", package = "chacha20" }
+ctr = "0.9"
+aes = "0.8"
