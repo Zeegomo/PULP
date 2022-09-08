@@ -24,15 +24,14 @@ const fn parse_cores_u8(s: &str) -> usize {
 }
 
 const CORES: usize = parse_cores_u8(core::env!("CORES"));
-const CLUSTER_L1_BUFFER_LEN: usize = 8192;
 
 /// Convenience struct for stream encryption / decryption using the PULP cluster.
 /// Supports encryption / decryption directly from ram or L2 memory and manages
 /// dma in/out autonomously.
-pub struct PulpWrapper {
+pub struct PulpWrapper<const BUF_LEN: usize> {
     cluster: Cluster,
-    cluster_buffer: BufAlloc<CLUSTER_L1_BUFFER_LEN>,
-    core_data: NonNull<CoreData>,
+    cluster_buffer: BufAlloc<BUF_LEN>,
+    core_data: NonNull<CoreData<BUF_LEN>>,
 }
 
 #[derive(Clone, Copy)]
@@ -42,18 +41,18 @@ pub enum SourceLocation {
     Ram(NonNull<PiDevice>),
 }
 
-impl PulpWrapper {
+impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
     /// Initialize the wrapper and allocates necessary buffers in the cluster.
     /// This enables to reuse allocations across calls to [run].
     pub fn new(mut cluster: Cluster) -> Self {
         // Safety: C api will not move out of the returned ptr
         let device_ptr = unsafe { Pin::get_unchecked_mut(cluster.device_mut()) as *mut PiDevice };
         Self {
-            cluster_buffer: <BufAlloc<CLUSTER_L1_BUFFER_LEN>>::new(&mut cluster),
+            cluster_buffer: <BufAlloc<BUF_LEN>>::new(&mut cluster),
             // TODO: Maybeuninit?
             core_data: NonNull::new(unsafe {
-                pi_cl_l1_malloc(device_ptr, core::mem::size_of::<CoreData>() as i32)
-            } as *mut CoreData)
+                pi_cl_l1_malloc(device_ptr, core::mem::size_of::<CoreData<BUF_LEN>>() as i32)
+            } as *mut CoreData<BUF_LEN>)
             .unwrap(),
             cluster,
         }
@@ -93,7 +92,7 @@ impl PulpWrapper {
         data: *mut cty::c_void,
     ) {
         unsafe {
-            let data: &CoreData = &*(data as *const CoreData);
+            let data: &CoreData<BUF_LEN> = &*(data as *const CoreData<BUF_LEN>);
             let CoreData {
                 key,
                 iv,
@@ -115,17 +114,18 @@ impl PulpWrapper {
             // To fit all data in L1 cache, we split input in rounds.
             let mut buf = match loc {
                 SourceLocation::L2 => {
-                    <DmaBuf<CORES, CLUSTER_L1_BUFFER_LEN>>::new_from_l2(source, l1_alloc)
+                    <DmaBuf<CORES, BUF_LEN>>::new_from_l2(source, l1_alloc)
                 }
                 SourceLocation::Ram(device) => {
-                    <DmaBuf<CORES, CLUSTER_L1_BUFFER_LEN>>::new_from_ram(source, l1_alloc, device)
+                    <DmaBuf<CORES, BUF_LEN>>::new_from_ram(source, l1_alloc, device)
                 }
                 _ => panic!("unsupported"),
             };
-            let round_buf_len = <DmaBuf<CORES, CLUSTER_L1_BUFFER_LEN>>::FULL_WORK_BUF_LEN;
+            // If the cipher is producing the keystream in incremental blocks,
+            // it's extremely important for efficiency that round_buf_len / cores is a multiple of the block size
+            let round_buf_len = <DmaBuf<CORES, BUF_LEN>>::FULL_WORK_BUF_LEN;
             let full_rounds = len / round_buf_len;
             let base = core_id * (round_buf_len / CORES);
-            assert_eq!(round_buf_len % (BLOCK_SIZE * CORES), 0);
             let mut past = 0;
 
             for _ in 0..full_rounds {
@@ -147,34 +147,32 @@ impl PulpWrapper {
     }
 }
 
-impl Drop for PulpWrapper {
+impl<const BUF_LEN: usize> Drop for PulpWrapper<BUF_LEN> {
     fn drop(&mut self) {
         unsafe {
             pi_cl_l1_free(
                 Pin::get_unchecked_mut(self.cluster.device_mut()) as *mut PiDevice,
                 self.core_data.as_ptr() as *mut cty::c_void,
-                core::mem::size_of::<CoreData>() as i32,
+                core::mem::size_of::<CoreData<BUF_LEN>>() as i32,
             );
         }
     }
 }
 
-const BLOCK_SIZE: usize = 64;
-
-struct CoreData {
+struct CoreData<const BUF_LEN: usize> {
     source: *mut u8,
     len: usize,
-    l1_alloc: *const BufAlloc<CLUSTER_L1_BUFFER_LEN>,
+    l1_alloc: *const BufAlloc<BUF_LEN>,
     key: *const u8,
     iv: *const u8,
     loc: SourceLocation,
 }
 
-impl CoreData {
+impl<const BUF_LEN: usize> CoreData<BUF_LEN> {
     fn new(
         source: *mut u8,
         len: usize,
-        l1_alloc: *const BufAlloc<CLUSTER_L1_BUFFER_LEN>,
+        l1_alloc: *const BufAlloc<BUF_LEN>,
         key: *const u8,
         iv: *const u8,
         loc: SourceLocation,
