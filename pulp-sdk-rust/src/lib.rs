@@ -7,6 +7,12 @@ use core::sync::atomic::*;
 extern crate alloc as core_alloc;
 use core_alloc::string::String;
 
+// Should use a more specific target triple like riscv32imcXpulp-unknown-pulp-{abi}
+// but we haven't added support for that in the Rust compiler yet.
+#[cfg(not(target_arch="riscv32"))]
+compile_error!("unsupported target");
+
+
 mod alloc;
 mod bindings;
 
@@ -107,9 +113,4 @@ pub unsafe fn pi_cl_team_fork(
     args: *mut cty::c_void,
 ) {
     pi_cl_team_fork_wrap(num_cores, cluster_fn, args);
-}
-
-#[inline(always)]
-pub fn rotate_right(x: u32, r: u32) -> u32 {
-    unsafe { rotate_right_wrap(x as i32, r as i32) as u32 }
 }

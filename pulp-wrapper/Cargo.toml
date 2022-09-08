@@ -9,5 +9,5 @@ edition = "2021"
 [dependencies]
 cty = "*"
 cipher = "*"
-pulp_sdk_rust = { git = " https://github.com/Zeegomo/pulp-sdk-rust" }
+pulp_sdk_rust = { path = "../pulp-sdk-rust" }
 generic-array = "*"

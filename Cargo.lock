@@ -12,14 +12,6 @@ dependencies = [
 [[package]]
 name = "asm-macros"
 version = "0.1.0"
-source = "git+https://github.com/Zeegomo/pulp-wrapper#ec3095ed53b2c03a8140b690b2a75a63151b3a00"
-dependencies = [
- "quote",
-]
-
-[[package]]
-name = "asm-macros"
-version = "0.1.0"
 source = "git+https://github.com/Zeegomo/stream-ciphers#858ebc62f3dc909de687ff702ff25ff9304db909"
 dependencies = [
  "quote",
@@ -69,14 +61,14 @@ dependencies = [
 name = "cipher-suite"
 version = "0.1.0"
 dependencies = [
- "asm-macros 0.1.0 (git+https://github.com/Zeegomo/pulp-wrapper)",
+ "asm-macros 0.1.0",
  "chacha20 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chacha20 0.9.0 (git+https://github.com/Zeegomo/stream-ciphers)",
  "cipher",
  "cty",
  "generic-array",
- "pulp-wrapper 0.1.0 (git+https://github.com/Zeegomo/pulp-wrapper)",
- "pulp_sdk_rust 0.1.0 (git+https://github.com/Zeegomo/pulp-sdk-rust)",
+ "pulp-wrapper",
+ "pulp_sdk_rust",
 ]
 
 [[package]]
@@ -144,31 +136,12 @@ dependencies = [
  "cipher",
  "cty",
  "generic-array",
- "pulp_sdk_rust 0.1.0 (git+https://github.com/Zeegomo/pulp-sdk-rust)",
-]
-
-[[package]]
-name = "pulp-wrapper"
-version = "0.1.0"
-source = "git+https://github.com/Zeegomo/pulp-wrapper#ec3095ed53b2c03a8140b690b2a75a63151b3a00"
-dependencies = [
- "cipher",
- "cty",
- "generic-array",
- "pulp_sdk_rust 0.1.0 (git+https://github.com/Zeegomo/pulp-sdk-rust)",
+ "pulp_sdk_rust",
 ]
 
 [[package]]
 name = "pulp_sdk_rust"
 version = "0.1.0"
-dependencies = [
- "cty",
-]
-
-[[package]]
-name = "pulp_sdk_rust"
-version = "0.1.0"
-source = "git+https://github.com/Zeegomo/pulp-sdk-rust#c3cb9369ae6d2a3ea89fd6abc36526cd70b393b7"
 dependencies = [
  "cty",
 ]
