@@ -9,9 +9,8 @@ use core_alloc::string::String;
 
 // Should use a more specific target triple like riscv32imcXpulp-unknown-pulp-{abi}
 // but we haven't added support for that in the Rust compiler yet.
-#[cfg(not(target_arch="riscv32"))]
+#[cfg(not(target_arch = "riscv32"))]
 compile_error!("unsupported target");
-
 
 mod alloc;
 mod bindings;
@@ -92,11 +91,11 @@ pub fn pi_cl_ram_write(
 }
 
 pub fn print(mut msg: String) {
-    unsafe { 
+    unsafe {
         let v = msg.as_mut_vec();
         let len = v.len();
-        v[len-1] = 0;
-        print_wrap(v.as_ptr() as *const cty::c_char) 
+        v[len - 1] = 0;
+        print_wrap(v.as_ptr() as *const cty::c_char)
     }
 }
 

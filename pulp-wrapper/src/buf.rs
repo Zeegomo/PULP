@@ -21,7 +21,7 @@ pub(crate) struct SourcePtr<'a> {
     _lifetime: PhantomData<&'a u8>,
 }
 
-impl<'alloc,const BUF_LEN: usize> BufAlloc<'alloc,BUF_LEN> {
+impl<'alloc, const BUF_LEN: usize> BufAlloc<'alloc, BUF_LEN> {
     pub fn new(cluster: &'alloc Cluster) -> Self {
         let allocator = cluster.l1_allocator();
         // SAFETY: u8 are always valid, and this will be overwritten before actual use by DMA
@@ -35,7 +35,7 @@ impl<'alloc,const BUF_LEN: usize> BufAlloc<'alloc,BUF_LEN> {
     }
 }
 
-impl<'alloc, const BUF_LEN: usize> Drop for BufAlloc<'alloc,BUF_LEN> {
+impl<'alloc, const BUF_LEN: usize> Drop for BufAlloc<'alloc, BUF_LEN> {
     fn drop(&mut self) {
         let _ = unsafe {
             Box::from_raw_in(
@@ -218,7 +218,7 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     /// * should only be called from within a PULP cluster
     pub fn new_from_ram(
         source: SourcePtr<'source>,
-        l1_alloc: &'buf BufAlloc<'alloc,BUF_LEN>,
+        l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
         device: NonNull<PiDevice>,
     ) -> Self {
         Self::common(
@@ -233,7 +233,10 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     ///
     /// Safety:
     /// * should only be called from within a PULP cluster
-    pub fn new_from_l2(source: SourcePtr<'source>, l1_alloc: &'buf BufAlloc<'alloc,BUF_LEN>) -> Self {
+    pub fn new_from_l2(
+        source: SourcePtr<'source>,
+        l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
+    ) -> Self {
         Self::common(
             source,
             l1_alloc,

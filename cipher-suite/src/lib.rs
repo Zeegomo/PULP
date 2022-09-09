@@ -33,15 +33,18 @@ pub enum Cipher {
 }
 
 macro_rules! extract_key_iv {
-    ($cipher:ty, $key:expr, $iv:expr) => {
-        {
-            let key = GenericArray::from_slice(core::slice::from_raw_parts($key, <$cipher as KeySizeUser>::KeySize::USIZE));
-            let iv = GenericArray::from_slice(core::slice::from_raw_parts($iv, <$cipher as IvSizeUser>::IvSize::USIZE));
-            (key, iv)
-        }
-    }
+    ($cipher:ty, $key:expr, $iv:expr) => {{
+        let key = GenericArray::from_slice(core::slice::from_raw_parts(
+            $key,
+            <$cipher as KeySizeUser>::KeySize::USIZE,
+        ));
+        let iv = GenericArray::from_slice(core::slice::from_raw_parts(
+            $iv,
+            <$cipher as IvSizeUser>::IvSize::USIZE,
+        ));
+        (key, iv)
+    }};
 }
-
 
 type Aes128Ctr = ctr::Ctr32LE<aes::Aes128>;
 const CLUSTER_L1_BUFFER_LEN: usize = 8192;
@@ -54,9 +57,12 @@ const CLUSTER_L1_BUFFER_LEN: usize = 8192;
 pub extern "C" fn cluster_init(cluster_loc: *mut *mut PiDevice) -> *mut cty::c_void {
     let mut cluster = Cluster::new().unwrap();
     unsafe {
-        *cluster_loc = Pin::get_unchecked_mut(cluster.device_mut());
+        *cluster_loc = cluster.as_mut_ptr();
     }
-    let wrapper = Box::new_in(<PulpWrapper<CLUSTER_L1_BUFFER_LEN>>::new(cluster), pulp_sdk_rust::L2Allocator);
+    let wrapper = Box::new_in(
+        <PulpWrapper<CLUSTER_L1_BUFFER_LEN>>::new(cluster),
+        pulp_sdk_rust::L2Allocator,
+    );
     Box::into_raw(wrapper) as *mut cty::c_void
 }
 
@@ -77,7 +83,9 @@ pub unsafe extern "C" fn encrypt(
     ram_device: *mut PiDevice,
     cipher: Cipher,
 ) {
-    let wrapper = (wrapper as *mut PulpWrapper<CLUSTER_L1_BUFFER_LEN>).as_mut().unwrap();
+    let wrapper = (wrapper as *mut PulpWrapper<CLUSTER_L1_BUFFER_LEN>)
+        .as_mut()
+        .unwrap();
     let data = core::slice::from_raw_parts_mut(data, len);
     let location = if let Some(device) = NonNull::new(ram_device) {
         SourceLocation::Ram(device)
@@ -88,11 +96,11 @@ pub unsafe extern "C" fn encrypt(
         Cipher::ChaCha20 => {
             let (key, iv) = extract_key_iv!(chacha20_orig::ChaCha20, key, iv);
             wrapper.run::<chacha20_orig::ChaCha20>(data, key, iv, location)
-        },
+        }
         Cipher::ChaCha20Pulp => {
             let (key, iv) = extract_key_iv!(chacha20::ChaCha20, key, iv);
             wrapper.run::<chacha20::ChaCha20>(data, key, iv, location)
-        },
+        }
         Cipher::Aes128Ctr => {
             let (key, iv) = extract_key_iv!(Aes128Ctr, key, iv);
             wrapper.run::<Aes128Ctr>(data, key, iv, location)

@@ -45,7 +45,9 @@ impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
         let l1_alloc = cluster.l1_allocator();
         let buffer = <BufAlloc<BUF_LEN>>::new(&cluster);
         Self {
-            cluster_buffer: unsafe { core::mem::transmute::<BufAlloc<'_, BUF_LEN>, BufAlloc<'static, BUF_LEN>>(buffer) },
+            cluster_buffer: unsafe {
+                core::mem::transmute::<BufAlloc<'_, BUF_LEN>, BufAlloc<'static, BUF_LEN>>(buffer)
+            },
             core_data: NonNull::new(Box::leak(Box::new_in(CoreData::empty(), l1_alloc))).unwrap(),
             cluster,
         }

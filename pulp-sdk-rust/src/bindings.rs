@@ -43,8 +43,6 @@ impl PiDevice {
     }
 }
 
-
-
 extern "C" {
     pub fn pi_cl_dma_cmd_wrap(
         ext: cty::uint32_t,
@@ -188,8 +186,6 @@ pub unsafe fn pi_core_id() -> usize {
     core_id & 0x01f
 }
 
-
-
 #[repr(C)]
 pub struct PiClusterConf {
     // do not move this one, might be accessed in various hackish way
@@ -234,9 +230,8 @@ pub enum PiDeviceType {
     PiDeviceCpiType,
     PiDeviceI2cType,
     PiDeviceGpioType,
-    PiDevicePwmType
+    PiDevicePwmType,
 }
-
 
 // Opaque structs
 // Not really fully opaque in C but they are not used by Rust code and it's easier to tream them as such
