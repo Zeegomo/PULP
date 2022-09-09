@@ -1,49 +1,41 @@
 use alloc::boxed::Box;
 use core::pin::Pin;
 use pulp_sdk_rust::{
-    pi_cluster_conf_init, pi_cluster_open, pi_open_from_conf, L2Allocator, PiClusterConf, PiDevice,
+    pi_cluster_conf_init, pi_cluster_open, pi_open_from_conf, ClusterAllocator, L2Allocator,
+    PiClusterConf, PiDevice,
 };
 
+/// Using raw pointers means we can guarantee at the same time:
+/// * no special aliasing since the returned pointer will be used by the C code in ways we cannot predict
+/// * pinning
 pub struct Cluster {
-    inner: Pin<Box<Inner, L2Allocator>>,
-}
-
-// The whole C interface is built around pointers, it would be a shame
-// for us to move them by accident.
-struct Inner {
-    _marker: core::marker::PhantomPinned,
-    device: PiDevice,
-    conf: PiClusterConf,
+    device: *mut PiDevice,
+    conf: *mut PiClusterConf,
 }
 
 impl Cluster {
     pub fn new() -> Result<Self, ()> {
-        let inner = Inner {
-            _marker: core::marker::PhantomPinned,
-            device: PiDevice::uninit(),
-            conf: PiClusterConf::uninit(),
-        };
-        let mut inner = Box::new_in(inner, L2Allocator);
+        let device: *mut _ = Box::leak(Box::new_in(PiDevice::uninit(), L2Allocator));
+        let conf: *mut _ = Box::leak(Box::new_in(PiClusterConf::uninit(), L2Allocator));
 
         unsafe {
-            pi_cluster_conf_init(&mut inner.conf as *mut PiClusterConf);
-            pi_open_from_conf(
-                &mut inner.device as *mut PiDevice,
-                &mut inner.conf as *mut PiClusterConf as *mut cty::c_void,
-            );
-            if pi_cluster_open(&mut inner.device as *mut PiDevice) != 0 {
+            pi_cluster_conf_init(conf);
+            pi_open_from_conf(device, conf as *mut cty::c_void);
+            if pi_cluster_open(device as *mut PiDevice) != 0 {
                 return Err(());
             }
 
-            Ok(Self {
-                inner: Pin::new_unchecked(inner),
-            })
+            Ok(Self { device, conf })
         }
     }
 
-    pub fn device_mut(&mut self) -> Pin<&mut PiDevice> {
-        // This is okay because `device` is always pinned
-        unsafe { self.inner.as_mut().map_unchecked_mut(|s| &mut s.device) }
+    // This should really be used only by C libraries
+    pub fn as_mut_ptr(&mut self) -> *mut PiDevice {
+        self.device
+    }
+
+    pub fn l1_allocator(&self) -> ClusterAllocator {
+        ClusterAllocator::new(self.device)
     }
 }
 

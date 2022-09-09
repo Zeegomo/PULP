@@ -36,17 +36,21 @@ unsafe impl GlobalAlloc for GlobalAllocator {
 }
 
 #[derive(Clone, Copy)]
-pub struct ClusterAllocator {
+pub struct ClusterAllocator<'a> {
     cluster: *mut PiDevice,
+    _marker: core::marker::PhantomData<&'a u8>,
 }
 
-impl ClusterAllocator {
+impl<'a> ClusterAllocator<'a> {
     pub fn new(cluster: *mut PiDevice) -> Self {
-        Self { cluster }
+        Self {
+            cluster,
+            _marker: core::marker::PhantomData,
+        }
     }
 }
 
-unsafe impl Allocator for ClusterAllocator {
+unsafe impl<'a> Allocator for ClusterAllocator<'a> {
     fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, AllocError> {
         if layout.align() > CLUSTER_L1_ALIGN {
             // TODO: use pi_l2_malloc_align()

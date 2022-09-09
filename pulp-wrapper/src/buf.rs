@@ -6,10 +6,10 @@ use core::marker::{PhantomData, PhantomPinned};
 use core::pin::Pin;
 use core::ptr::NonNull;
 
-// newtype around naked pointer to guarantee proper allocation and handling
-pub(crate) struct BufAlloc<const BUF_LEN: usize> {
+// newtype around owned naked pointer to guarantee proper allocation and handling
+pub(crate) struct BufAlloc<'a, const BUF_LEN: usize> {
     buf: *mut u8,
-    allocator: ClusterAllocator,
+    allocator: ClusterAllocator<'a>,
 }
 
 // Newtype around naked pointer to guarantee proper handling
@@ -21,10 +21,9 @@ pub(crate) struct SourcePtr<'a> {
     _lifetime: PhantomData<&'a u8>,
 }
 
-impl<const BUF_LEN: usize> BufAlloc<BUF_LEN> {
-    pub fn new(cluster: &mut Cluster) -> Self {
-        let device_ptr = unsafe { Pin::get_unchecked_mut(cluster.device_mut()) as *mut PiDevice };
-        let allocator = ClusterAllocator::new(device_ptr);
+impl<'alloc,const BUF_LEN: usize> BufAlloc<'alloc,BUF_LEN> {
+    pub fn new(cluster: &'alloc Cluster) -> Self {
+        let allocator = cluster.l1_allocator();
         // SAFETY: u8 are always valid, and this will be overwritten before actual use by DMA
         let buf =
             unsafe { Box::leak(Box::new_uninit_slice_in(BUF_LEN * 3, allocator).assume_init()) };
@@ -36,7 +35,7 @@ impl<const BUF_LEN: usize> BufAlloc<BUF_LEN> {
     }
 }
 
-impl<const BUF_LEN: usize> Drop for BufAlloc<BUF_LEN> {
+impl<'alloc, const BUF_LEN: usize> Drop for BufAlloc<'alloc,BUF_LEN> {
     fn drop(&mut self) {
         let _ = unsafe {
             Box::from_raw_in(
@@ -97,14 +96,14 @@ impl<'a> SourcePtr<'a> {
 ///   dma in (pre-fetch) dma out (commit) work
 ///         |              |              |
 /// |--------------|--------------|---------------|
-pub(crate) struct DmaBuf<'buf, 'source, const CORES: usize, const BUF_LEN: usize> {
+pub(crate) struct DmaBuf<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize> {
     // data in external memory
     source: SourcePtr<'source>,
     // allocation in L1 cache
     // Ideally the blocks are layed out in memory so that each core's block lays entirely on a different l1 bank so that we minimize contention
     // on the same bank. Probably we could force this knowing the memory addresses layout
     // DMA should also operate on separate banks
-    l1_alloc: &'buf BufAlloc<BUF_LEN>,
+    l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
     // how many rounds have been completed till now
     rounds: usize,
     pre_fetch_dma: DmaTransfer,
@@ -176,14 +175,14 @@ impl DmaTransfer {
     }
 }
 
-impl<'buf, 'source, const CORES: usize, const BUF_LEN: usize>
-    DmaBuf<'buf, 'source, CORES, BUF_LEN>
+impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
+    DmaBuf<'alloc, 'buf, 'source, CORES, BUF_LEN>
 {
     pub const FULL_WORK_BUF_LEN: usize = BUF_LEN;
 
     fn common(
         source: SourcePtr<'source>,
-        l1_alloc: &'buf BufAlloc<BUF_LEN>,
+        l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
         mut pre_fetch_dma: DmaTransfer,
         commit_dma: DmaTransfer,
     ) -> Self {
@@ -219,7 +218,7 @@ impl<'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     /// * should only be called from within a PULP cluster
     pub fn new_from_ram(
         source: SourcePtr<'source>,
-        l1_alloc: &'buf BufAlloc<BUF_LEN>,
+        l1_alloc: &'buf BufAlloc<'alloc,BUF_LEN>,
         device: NonNull<PiDevice>,
     ) -> Self {
         Self::common(
@@ -234,7 +233,7 @@ impl<'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     ///
     /// Safety:
     /// * should only be called from within a PULP cluster
-    pub fn new_from_l2(source: SourcePtr<'source>, l1_alloc: &'buf BufAlloc<BUF_LEN>) -> Self {
+    pub fn new_from_l2(source: SourcePtr<'source>, l1_alloc: &'buf BufAlloc<'alloc,BUF_LEN>) -> Self {
         Self::common(
             source,
             l1_alloc,

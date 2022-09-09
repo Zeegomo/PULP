@@ -31,19 +31,21 @@ const CORES: usize = parse_cores_u8(core::env!("CORES"));
 /// dma in/out autonomously.
 pub struct PulpWrapper<const BUF_LEN: usize> {
     cluster: Cluster,
-    cluster_buffer: BufAlloc<BUF_LEN>,
+    // The correct lifetime here would be 'self if we could write it
+    // As long as this is never exposed outside and we know our use does not
+    // result in invalid references it's fine to use 'static
+    cluster_buffer: BufAlloc<'static, BUF_LEN>,
     core_data: NonNull<CoreData<BUF_LEN>>,
 }
 
 impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
     /// Initialize the wrapper and allocates necessary buffers in the cluster.
     /// This enables to reuse allocations across calls to [run].
-    pub fn new(mut cluster: Cluster) -> Self {
-        // Safety: C api will not move out of the returned ptr
-        let device_ptr = unsafe { Pin::get_unchecked_mut(cluster.device_mut()) as *mut PiDevice };
-        let l1_alloc = ClusterAllocator::new(device_ptr);
+    pub fn new(cluster: Cluster) -> Self {
+        let l1_alloc = cluster.l1_allocator();
+        let buffer = <BufAlloc<BUF_LEN>>::new(&cluster);
         Self {
-            cluster_buffer: <BufAlloc<BUF_LEN>>::new(&mut cluster),
+            cluster_buffer: unsafe { core::mem::transmute::<BufAlloc<'_, BUF_LEN>, BufAlloc<'static, BUF_LEN>>(buffer) },
             core_data: NonNull::new(Box::leak(Box::new_in(CoreData::empty(), l1_alloc))).unwrap(),
             cluster,
         }
@@ -104,9 +106,7 @@ impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
 
             // To fit all data in L1 cache, we split input in rounds.
             let mut buf = match loc {
-                SourceLocation::L2 => {
-                    <DmaBuf<CORES, BUF_LEN>>::new_from_l2(source, l1_alloc)
-                }
+                SourceLocation::L2 => <DmaBuf<CORES, BUF_LEN>>::new_from_l2(source, l1_alloc),
                 SourceLocation::Ram(device) => {
                     <DmaBuf<CORES, BUF_LEN>>::new_from_ram(source, l1_alloc, device)
                 }
@@ -141,9 +141,7 @@ impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
 impl<const BUF_LEN: usize> Drop for PulpWrapper<BUF_LEN> {
     fn drop(&mut self) {
         unsafe {
-            let device_ptr = Pin::get_unchecked_mut(self.cluster.device_mut()) as *mut PiDevice;
-            let l1_alloc = ClusterAllocator::new(device_ptr);
-            let _ = Box::from_raw_in(self.core_data.as_mut(), l1_alloc);
+            let _ = Box::from_raw_in(self.core_data.as_mut(), self.cluster.l1_allocator());
         }
     }
 }
@@ -151,7 +149,7 @@ impl<const BUF_LEN: usize> Drop for PulpWrapper<BUF_LEN> {
 struct CoreData<const BUF_LEN: usize> {
     source: *mut u8,
     len: usize,
-    l1_alloc: *const BufAlloc<BUF_LEN>,
+    l1_alloc: *const BufAlloc<'static, BUF_LEN>,
     key: *const u8,
     iv: *const u8,
     loc: SourceLocation,
@@ -161,7 +159,7 @@ impl<const BUF_LEN: usize> CoreData<BUF_LEN> {
     fn new(
         source: *mut u8,
         len: usize,
-        l1_alloc: *const BufAlloc<BUF_LEN>,
+        l1_alloc: *const BufAlloc<'static, BUF_LEN>,
         key: *const u8,
         iv: *const u8,
         loc: SourceLocation,
