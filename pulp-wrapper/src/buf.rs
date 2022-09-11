@@ -268,7 +268,6 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
                     self.pre_fetch_dma.wait();
                 }
 
-                core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
                 pi_cl_team_barrier();
 
                 // start dma out (commit)
@@ -290,7 +289,6 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
                 }
             } else {
                 // everyone has to wait for transfers to be finished
-                core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
                 pi_cl_team_barrier();
             }
 
@@ -318,7 +316,7 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
         let base = core_buf_len * unsafe { pi_core_id() };
         let len = core::cmp::min(core_buf_len, self.work_buf_len.saturating_sub(base));
         unsafe {
-            let ptr = self.l1_alloc.buf.add(base);
+            let ptr = self.l1_alloc.buf.add(self.counters[0] + base);
             InOutBuf::from_raw(ptr as *const u8, ptr, len)
         }
     }
