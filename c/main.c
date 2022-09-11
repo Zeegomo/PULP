@@ -18,7 +18,7 @@ PI_L2 int lennn[1];
 PI_L2 struct pi_device ram;
 PI_L2 uint32_t ram_ptr;
 
-void* cluster_init(pi_device_t** device);
+void* cluster_init();
 
 void cluster_close(void* wrapper);
 
@@ -72,64 +72,10 @@ void test(uint8_t* a,  uint8_t* b, uint8_t* c, uint32_t len);
     printf("[%d] I$ misses = %lu\n", 0, _imiss/REPEAT);
 
 
-// Cluster entry pointd
-static void cluster_entry(void *arg)
-{
-//  // init performance counters
-     INIT_STATS();
-
-//   // executing the code multiple times to perform average statistics
-    ENTER_STATS_LOOP();
-    for(int i = 0; i < lennn[0]; i++){
-      data[i] = 0;
-  }
-    START_STATS();
-    encrypt(data, lennn[0], key, iv, arg, NULL, 0);
-    STOP_STATS();
-
-  // end of the performance statistics loop
-    EXIT_STATS_LOOP();
-}
-
-static void cluster_entry_ram(void *arg)
-{
-//  // init performance counters
-     //INIT_STATS();
-
-//   // executing the code multiple times to perform average statistics
-    //ENTER_STATS_LOOP();
-  //   for(int i = 0; i < len; i++){
-  //     data[i] = 0;
-  //     data2[i] = 0;
-  //     data3[i]= 0;
-  // }
-    // START_STATS();
-    if (arg == NULL) {
-    exit(2);
-  }
-    //chacha20_encrypt_ram((char *)ram_ptr, lennn[0], key, iv, arg, &ram);
-    // STOP_STATS();
-
-  // end of the performance statistics loop
-    // EXIT_STATS_LOOP();
-}
-
-
 int main()
 {
-  //cluster_dev[0] = {0};
   struct pi_hyperram_conf ram_conf;
-  struct pi_cluster_conf conf;
-  struct pi_cluster_task cluster_task = {0};
-  struct pi_cluster_task cluster_task_ram = {0};
-
-  // [OPTIONAL] specify the stack size for the task
-  cluster_task.stack_size = STACK_SIZE;
-  cluster_task.slave_stack_size = STACK_SIZE;
-  pi_device_t* cluster_dev;
-
-
-  void* wrapper = cluster_init(&cluster_dev);
+  void* wrapper = cluster_init();
 
   printf("%p\n", wrapper);
   if (wrapper == NULL) {
@@ -144,14 +90,20 @@ int main()
     data[j] = 0;
   }
 
-
-
   printf("iteration: %d\n", LEN);
-  pi_cluster_task(&cluster_task, cluster_entry, wrapper);
-    //pi_cluster_task(&cluster_task_ram, cluster_entry_ram, wrapper);
-  pi_cluster_send_task_to_cl(cluster_dev, &cluster_task);
-    //pi_cluster_send_task_to_cl(cluster_dev, &cluster_task_ram);
+  INIT_STATS();
 
+  // executing the code multiple times to perform average statistics
+  ENTER_STATS_LOOP();
+  for(int i = 0; i < lennn[0]; i++){
+    data[i] = 0;
+  }
+  START_STATS();
+  encrypt(data, lennn[0], key, iv, wrapper, NULL, 0);
+  STOP_STATS();
+
+  // end of the performance statistics loop
+  EXIT_STATS_LOOP();
   // encrypt_serial_orig(data3, i, key, iv);
   
     // for(int j = 0; j < i; j++){
@@ -163,10 +115,7 @@ int main()
     //       exit(1);
     //   }
     // }
-  
 
-  printf("encrypt serial\n", data[0], data[LEN-1]);
   cluster_close(wrapper);
-
   return 0;
 }
