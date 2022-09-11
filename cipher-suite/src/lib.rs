@@ -8,8 +8,8 @@ use alloc::boxed::Box;
 use cipher::{IvSizeUser, KeySizeUser, Unsigned};
 use core::ptr::NonNull;
 use generic_array::GenericArray;
-use pulp_sdk_rust::{abort_all, GlobalAllocator, PiDevice};
-use pulp_wrapper::{Cluster, PulpWrapper, SourceLocation};
+use pulp_sdk_rust::{abort_all, GlobalAllocator, PiDevice, Cluster};
+use pulp_wrapper::{PulpWrapper, SourceLocation};
 // This should not actually be used, as it's not clear from the context what the default allocation is
 #[global_allocator]
 static DEFAULT_ALLOCATOR: GlobalAllocator = GlobalAllocator;

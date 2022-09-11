@@ -11,6 +11,8 @@ compile_error!("unsupported target");
 
 mod alloc;
 mod bindings;
+mod cluster;
 
 pub use alloc::*;
 pub use bindings::*;
+pub use cluster::*;

@@ -1,5 +1,5 @@
-use alloc::boxed::Box;
-use pulp_sdk_rust::*;
+use core_alloc::boxed::Box;
+use crate::*;
 
 /// Using raw pointers means we can guarantee at the same time:
 /// * no special aliasing since the returned pointer will be used by the C code in ways we cannot predict

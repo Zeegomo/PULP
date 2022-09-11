@@ -10,9 +10,7 @@ use pulp_sdk_rust::*;
 use generic_array::GenericArray;
 
 mod buf;
-mod cluster;
 use buf::{BufAlloc, DmaBuf, SourcePtr};
-pub use cluster::Cluster;
 
 /// Convenience struct for stream encryption / decryption using the PULP cluster.
 /// Supports encryption / decryption directly from ram or L2 memory and manages
