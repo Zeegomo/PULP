@@ -52,6 +52,6 @@ void pi_cl_ram_write_wrap( 	struct pi_device *  	device,
 }
 
 
-void print_wrap(char* str) {
-  printf("%s", str);
+struct pi_cluster_task *pi_cluster_task_wrap(struct pi_cluster_task *task, void (*entry)(void*), void *arg) {
+  return pi_cluster_task(task, entry, arg);
 }

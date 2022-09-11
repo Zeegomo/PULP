@@ -43,66 +43,6 @@ impl PiDevice {
     }
 }
 
-extern "C" {
-    pub fn pi_cl_dma_cmd_wrap(
-        ext: cty::uint32_t,
-        loc: cty::uint32_t,
-        size: cty::uint32_t,
-        dir: PiClDmaDirE,
-        cmd: *mut PiClDmaCmd,
-    );
-
-    pub fn pi_cl_dma_wait_wrap(copy: *mut cty::c_void);
-
-    pub fn pi_cl_ram_read_wait_wrap(req: *mut PiClRamReq);
-
-    pub fn pi_cl_ram_write_wait_wrap(req: *mut PiClRamReq);
-
-    pub fn pi_cl_ram_read_wrap(
-        device: *mut PiDevice,
-        pi_ram_addr: u32,
-        addr: *mut cty::c_void,
-        size: u32,
-        req: *mut PiClRamReq,
-    );
-
-    pub fn pi_cl_ram_write_wrap(
-        device: *mut PiDevice,
-        pi_ram_addr: u32,
-        addr: *mut cty::c_void,
-        size: u32,
-        req: *mut PiClRamReq,
-    );
-
-    pub fn abort_all();
-
-    pub fn pi_cl_team_fork_wrap(
-        num_cores: usize,
-        cluster_fn: extern "C" fn(*mut cty::c_void),
-        args: *mut cty::c_void,
-    );
-
-    pub fn pi_cl_team_barrier_wrap();
-
-    pub fn pi_l2_malloc(size: cty::c_int) -> *mut cty::c_void;
-
-    pub fn pi_l2_free(chunk: *mut cty::c_void, size: cty::c_int);
-
-    pub fn pi_cl_l1_malloc(cluster: *mut PiDevice, size: cty::c_int) -> *mut cty::c_void;
-
-    pub fn pi_cl_l1_free(cluster: *mut PiDevice, chunk: *mut cty::c_void, size: cty::c_int);
-
-    pub fn rotate_right_wrap(x: cty::c_int, r: cty::c_int) -> cty::c_int;
-
-    pub fn pi_cluster_conf_init(conf: *mut PiClusterConf);
-
-    pub fn pi_open_from_conf(device: *mut PiDevice, conf: *mut cty::c_void);
-
-    pub fn pi_cluster_open(device: *mut PiDevice) -> cty::c_int;
-
-    pub fn print_wrap(str: *const cty::c_char);
-}
-
 #[repr(C)]
 pub struct PiClRamReq {
     device: *mut PiDevice,
@@ -179,13 +119,6 @@ impl PiTask {
     }
 }
 
-#[inline(always)]
-pub unsafe fn pi_core_id() -> usize {
-    let core_id: usize;
-    core::arch::asm!("csrr {core_id}, 0x014", core_id = out(reg) core_id,);
-    core_id & 0x01f
-}
-
 #[repr(C)]
 pub struct PiClusterConf {
     // do not move this one, might be accessed in various hackish way
@@ -233,7 +166,46 @@ pub enum PiDeviceType {
     PiDevicePwmType,
 }
 
-// Opaque structs
+#[repr(C)]
+pub struct PiClusterTask {
+    // entry function and its argument(s)
+    entry: extern "C" fn(arg: *mut cty::c_void),
+    arg: *mut cty::c_void,
+    // pointer to first stack, and size for each cores
+    stacks: *mut cty::c_void,
+    stack_size: cty::uint32_t,
+    slave_stack_size: cty::uint32_t,
+    // Number of cores to be activated
+    nb_cores: cty::c_int,
+    // callback called at task completion
+    completion_callback: *mut PiTaskOpaque,
+    stack_allocated: cty::c_int,
+    // to implement a fifo
+    next: *mut Self,
+
+    core_mask: cty::c_int,
+}
+
+extern "C" fn noop(_: *mut cty::c_void) {}
+
+impl PiClusterTask {
+    pub fn uninit() -> Self {
+        Self {
+            entry: noop,
+            arg: core::ptr::null_mut() as *mut cty::c_void,
+            stacks: core::ptr::null_mut() as *mut cty::c_void,
+            stack_size: 0,
+            slave_stack_size: 0,
+            nb_cores: 0,
+            completion_callback: core::ptr::null_mut() as *mut PiTaskOpaque,
+            stack_allocated: 0,
+            next: core::ptr::null_mut() as *mut Self,
+            core_mask: 0,
+        }
+    }
+}
+
+// Opaque structsself.core_data.as_mut()
 // Not really fully opaque in C but they are not used by Rust code and it's easier to tream them as such
 
 #[repr(C)]
@@ -246,6 +218,14 @@ pub struct PmsisEventKernelWrap {
 
 #[repr(C)]
 pub struct PiDeviceApi {
+    // Private field to avoid instantiation outside of this module
+    _data: [u8; 0],
+    // Do not let the compiler assume stuff it shouldn't
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+#[repr(C)]
+pub struct PiTaskOpaque {
     // Private field to avoid instantiation outside of this module
     _data: [u8; 0],
     // Do not let the compiler assume stuff it shouldn't
