@@ -5,7 +5,7 @@ extern crate alloc;
 
 use alloc::boxed::Box;
 use cipher::{KeyIvInit, StreamCipher, StreamCipherSeek, Unsigned};
-use core::{pin::Pin, ptr::NonNull};
+use core::ptr::NonNull;
 use pulp_sdk_rust::*;
 
 use generic_array::GenericArray;
@@ -73,21 +73,13 @@ impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
             iv.as_ptr(),
             loc,
         );
-
-        *self.core_data.as_mut() = data;
-
-        pi_cl_team_fork(
-            CORES,
-            Self::entry_point::<C>,
-            self.core_data.as_ptr() as *mut cty::c_void,
-        );
+        self.cluster.execute_fn_parallel(Self::entry_point::<C>, data);
     }
 
     extern "C" fn entry_point<C: StreamCipher + StreamCipherSeek + KeyIvInit>(
-        data: *mut cty::c_void,
+        data: &CoreData<BUF_LEN>,
     ) {
         unsafe {
-            let data: &CoreData<BUF_LEN> = &*(data as *const CoreData<BUF_LEN>);
             let CoreData {
                 key,
                 iv,
@@ -157,6 +149,10 @@ struct CoreData<const BUF_LEN: usize> {
     loc: SourceLocation,
 }
 
+// This is not safe in general but we promise we won't abuse it
+unsafe impl<const BUF_LEN: usize> Send for CoreData<BUF_LEN> {}
+unsafe impl<const BUF_LEN: usize> Sync for CoreData<BUF_LEN> {}
+
 impl<const BUF_LEN: usize> CoreData<BUF_LEN> {
     fn new(
         source: *mut u8,
@@ -172,7 +168,7 @@ impl<const BUF_LEN: usize> CoreData<BUF_LEN> {
             l1_alloc,
             key,
             iv,
-            loc,
+            loc
         }
     }
 

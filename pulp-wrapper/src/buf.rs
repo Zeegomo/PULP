@@ -3,7 +3,6 @@ use ::pulp_sdk_rust::*;
 use alloc::boxed::Box;
 use cipher::inout::InOutBuf;
 use core::marker::{PhantomData, PhantomPinned};
-use core::pin::Pin;
 use core::ptr::NonNull;
 
 // newtype around owned naked pointer to guarantee proper allocation and handling
@@ -269,6 +268,7 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
                     self.pre_fetch_dma.wait();
                 }
 
+                core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
                 pi_cl_team_barrier();
 
                 // start dma out (commit)
@@ -290,6 +290,7 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
                 }
             } else {
                 // everyone has to wait for transfers to be finished
+                core::sync::atomic::fence(core::sync::atomic::Ordering::SeqCst);
                 pi_cl_team_barrier();
             }
 
