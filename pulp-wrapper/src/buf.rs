@@ -21,7 +21,7 @@ pub(crate) struct SourcePtr<'a> {
 }
 
 impl<'alloc, const BUF_LEN: usize> BufAlloc<'alloc, BUF_LEN> {
-    pub fn new(cluster: &'alloc Cluster) -> Self {
+    pub fn new<const CORES: usize>(cluster: &'alloc Cluster<CORES>) -> Self {
         let allocator = cluster.l1_allocator();
         // SAFETY: u8 are always valid, and this will be overwritten before actual use by DMA
         let buf =

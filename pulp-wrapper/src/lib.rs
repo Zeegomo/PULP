@@ -3,7 +3,6 @@
 #![feature(new_uninit)]
 extern crate alloc;
 
-use alloc::boxed::Box;
 use cipher::{KeyIvInit, StreamCipher, StreamCipherSeek, Unsigned};
 use core::ptr::NonNull;
 use pulp_sdk_rust::*;
@@ -15,40 +14,26 @@ mod cluster;
 use buf::{BufAlloc, DmaBuf, SourcePtr};
 pub use cluster::Cluster;
 
-const fn parse_cores_u8(s: &str) -> usize {
-    let cores = (s.as_bytes()[0] - b'0') as usize;
-
-    if cores.count_ones() != 1 {
-        panic!("Unsupported number of cores. Please use a power of 2");
-    }
-    cores
-}
-
-const CORES: usize = parse_cores_u8(core::env!("CORES"));
-
 /// Convenience struct for stream encryption / decryption using the PULP cluster.
 /// Supports encryption / decryption directly from ram or L2 memory and manages
 /// dma in/out autonomously.
-pub struct PulpWrapper<const BUF_LEN: usize> {
-    cluster: Cluster,
+pub struct PulpWrapper<const CORES: usize, const BUF_LEN: usize> {
+    cluster: Cluster<CORES>,
     // The correct lifetime here would be 'self if we could write it
     // As long as this is never exposed outside and we know our use does not
     // result in invalid references it's fine to use 'static
     cluster_buffer: BufAlloc<'static, BUF_LEN>,
-    core_data: NonNull<CoreData<BUF_LEN>>,
 }
 
-impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
+impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
     /// Initialize the wrapper and allocates necessary buffers in the cluster.
-    /// This enables to reuse allocations across calls to [run].
-    pub fn new(cluster: Cluster) -> Self {
-        let l1_alloc = cluster.l1_allocator();
+    /// This is to reuse allocations across calls to [run].
+    pub fn new(cluster: Cluster<CORES>) -> Self {
         let buffer = <BufAlloc<BUF_LEN>>::new(&cluster);
         Self {
             cluster_buffer: unsafe {
                 core::mem::transmute::<BufAlloc<'_, BUF_LEN>, BufAlloc<'static, BUF_LEN>>(buffer)
             },
-            core_data: NonNull::new(Box::leak(Box::new_in(CoreData::empty(), l1_alloc))).unwrap(),
             cluster,
         }
     }
@@ -132,14 +117,6 @@ impl<const BUF_LEN: usize> PulpWrapper<BUF_LEN> {
     }
 }
 
-impl<const BUF_LEN: usize> Drop for PulpWrapper<BUF_LEN> {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = Box::from_raw_in(self.core_data.as_mut(), self.cluster.l1_allocator());
-        }
-    }
-}
-
 struct CoreData<const BUF_LEN: usize> {
     source: *mut u8,
     len: usize,
@@ -169,17 +146,6 @@ impl<const BUF_LEN: usize> CoreData<BUF_LEN> {
             key,
             iv,
             loc
-        }
-    }
-
-    fn empty() -> Self {
-        Self {
-            source: core::ptr::null_mut(),
-            len: 0,
-            l1_alloc: core::ptr::null(),
-            key: core::ptr::null(),
-            iv: core::ptr::null(),
-            loc: SourceLocation::L1,
         }
     }
 }

@@ -4,12 +4,12 @@ use pulp_sdk_rust::*;
 /// Using raw pointers means we can guarantee at the same time:
 /// * no special aliasing since the returned pointer will be used by the C code in ways we cannot predict
 /// * pinning
-pub struct Cluster {
+pub struct Cluster<const CORES: usize> {
     device: *mut PiDevice,
     _conf: *mut PiClusterConf,
 }
 
-impl Cluster {
+impl<const CORES: usize> Cluster<CORES> {
     pub fn new() -> Result<Self, ()> {
         let device: *mut _ = Box::leak(Box::new_in(PiDevice::uninit(), L2Allocator));
         let _conf: *mut _ = Box::leak(Box::new_in(PiClusterConf::uninit(), L2Allocator));
@@ -39,7 +39,7 @@ impl Cluster {
         unsafe {
             pi_cluster_task(
                 &mut cluster_task,
-                Self::execute_inner_pre_fork::<8, T>,
+                Self::execute_inner_pre_fork::<CORES, T>,
                 exec_fn_args as *mut _ as *mut cty::c_void,
             );
             pi_cluster_send_task_to_cl(self.device, &mut cluster_task);
@@ -47,8 +47,8 @@ impl Cluster {
         }
     }
 
-    extern "C" fn execute_inner_pre_fork<const CORES: usize, T: Send + Sync>(data: *mut cty::c_void) {
-        unsafe { pi_cl_team_fork(CORES, Self::execute_inner::<T>, data) }
+    extern "C" fn execute_inner_pre_fork<const C: usize, T: Send + Sync>(data: *mut cty::c_void) {
+        unsafe { pi_cl_team_fork(C, Self::execute_inner::<T>, data) }
     }
 
     extern "C" fn execute_inner<T: Send + Sync>(data: *mut cty::c_void) {
@@ -58,7 +58,7 @@ impl Cluster {
     }
 }
 
-impl Drop for Cluster {
+impl<const CORES:usize> Drop for Cluster<CORES> {
     fn drop(&mut self) {
         // TODO
     }

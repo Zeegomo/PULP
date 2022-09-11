@@ -4,13 +4,11 @@
 #![feature(new_uninit)]
 extern crate alloc;
 
-use crate::alloc::string::ToString;
 use alloc::boxed::Box;
 use cipher::{IvSizeUser, KeySizeUser, Unsigned};
-use core::pin::Pin;
 use core::ptr::NonNull;
 use generic_array::GenericArray;
-use pulp_sdk_rust::{abort_all, print, GlobalAllocator, PiDevice};
+use pulp_sdk_rust::{abort_all, GlobalAllocator, PiDevice};
 use pulp_wrapper::{Cluster, PulpWrapper, SourceLocation};
 // This should not actually be used, as it's not clear from the context what the default allocation is
 #[global_allocator]
@@ -19,8 +17,7 @@ static DEFAULT_ALLOCATOR: GlobalAllocator = GlobalAllocator;
 use core::panic::PanicInfo;
 
 #[panic_handler]
-fn panic_handler(info: &PanicInfo) -> ! {
-    print(info.to_string());
+fn panic_handler(_info: &PanicInfo) -> ! {
     unsafe { abort_all() };
     loop {}
 }
@@ -48,19 +45,26 @@ macro_rules! extract_key_iv {
 
 type Aes128Ctr = ctr::Ctr32LE<aes::Aes128>;
 const CLUSTER_L1_BUFFER_LEN: usize = 8192;
+const CORES: usize = parse_cores_u8(core::env!("CORES"));
 
-/// Initialize the cluster wrapper in L2 memory
-///
-/// Safety:
-/// * device must be a valid pointer to a correctly initialized PULP cluster
-#[no_mangle]
-pub extern "C" fn cluster_init(cluster_loc: *mut *mut PiDevice) -> *mut cty::c_void {
-    let mut cluster = Cluster::new().unwrap();
-    unsafe {
-        *cluster_loc = cluster.as_mut_ptr();
+const fn parse_cores_u8(s: &str) -> usize {
+    let cores = (s.as_bytes()[0] - b'0') as usize;
+
+    if cores.count_ones() != 1 {
+        panic!("Unsupported number of cores. Please use a power of 2");
     }
+    cores
+}
+
+
+
+
+/// Initialize the cluster and the cluster wrapper wrapper in L2 memory
+#[no_mangle]
+pub extern "C" fn cluster_init() -> *mut cty::c_void {
+    let cluster = <Cluster<CORES>>::new().unwrap();
     let wrapper = Box::new_in(
-        <PulpWrapper<CLUSTER_L1_BUFFER_LEN>>::new(cluster),
+        <PulpWrapper<CORES,CLUSTER_L1_BUFFER_LEN>>::new(cluster),
         pulp_sdk_rust::L2Allocator,
     );
     Box::into_raw(wrapper) as *mut cty::c_void
@@ -83,7 +87,7 @@ pub unsafe extern "C" fn encrypt(
     ram_device: *mut PiDevice,
     cipher: Cipher,
 ) {
-    let wrapper = (wrapper as *mut PulpWrapper<CLUSTER_L1_BUFFER_LEN>)
+    let wrapper = (wrapper as *mut PulpWrapper<CORES, CLUSTER_L1_BUFFER_LEN>)
         .as_mut()
         .unwrap();
     let data = core::slice::from_raw_parts_mut(data, len);
@@ -113,7 +117,7 @@ pub unsafe extern "C" fn encrypt(
 /// Safety: wrapper must be a valid pointer to an initialized PULP wrapper
 #[no_mangle]
 pub unsafe extern "C" fn cluster_close(wrapper: *mut cty::c_void) {
-    let _wrapper = Box::from_raw_in(wrapper, pulp_sdk_rust::L2Allocator);
+    let _wrapper = Box::from_raw_in(wrapper as *mut PulpWrapper<CORES,CLUSTER_L1_BUFFER_LEN>, pulp_sdk_rust::L2Allocator);
 }
 
 /// Encrypt data serially using the unmodified version of this library
