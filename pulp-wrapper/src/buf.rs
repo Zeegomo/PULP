@@ -312,7 +312,7 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     /// Get mutable pointers to working core buffer
     #[inline(always)]
     pub fn get_work_buf(&mut self) -> InOutBuf<'_, '_, u8> {
-        let core_buf_len = BUF_LEN / CORES;
+        let core_buf_len = (self.work_buf_len + CORES - 1) / CORES;
         let base = core_buf_len * unsafe { pi_core_id() };
         let len = core::cmp::min(core_buf_len, self.work_buf_len.saturating_sub(base));
         unsafe {
