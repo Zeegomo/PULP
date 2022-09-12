@@ -12,6 +12,8 @@ use generic_array::GenericArray;
 mod buf;
 use buf::{BufAlloc, DmaBuf, SourcePtr};
 
+const USE_L1: bool = true;
+
 /// Convenience struct for stream encryption / decryption using the PULP cluster.
 /// Supports encryption / decryption directly from ram or L2 memory and manages
 /// dma in/out autonomously.
@@ -27,7 +29,15 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
     /// Initialize the wrapper and allocates necessary buffers in the cluster.
     /// This is to reuse allocations across calls to [run].
     pub fn new(cluster: Cluster<CORES>) -> Self {
-        let buffer = <BufAlloc<BUF_LEN>>::new(&cluster);
+        let buffer = if USE_L1 {
+            <BufAlloc<BUF_LEN>>::new(&cluster)
+        } else {
+            BufAlloc{
+                buf: core::ptr::null_mut(),
+                allocator: cluster.l1_allocator(),
+            }
+        };
+
         Self {
             cluster_buffer: unsafe {
                 core::mem::transmute::<BufAlloc<'_, BUF_LEN>, BufAlloc<'static, BUF_LEN>>(buffer)
@@ -56,7 +66,8 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
             iv.as_ptr(),
             loc,
         );
-        self.cluster.execute_fn_parallel(Self::entry_point::<C>, data);
+        self.cluster
+            .execute_fn_parallel(Self::entry_point::<C>, data);
     }
 
     extern "C" fn entry_point<C: StreamCipher + StreamCipherSeek + KeyIvInit>(
@@ -81,36 +92,46 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
             let mut cipher = C::new(key, iv);
             let core_id = pi_core_id();
 
-            // To fit all data in L1 cache, we split input in rounds.
-            let mut buf = match loc {
-                SourceLocation::L2 => <DmaBuf<CORES, BUF_LEN>>::new_from_l2(source, l1_alloc),
-                SourceLocation::Ram(device) => {
-                    <DmaBuf<CORES, BUF_LEN>>::new_from_ram(source, l1_alloc, device)
+            if USE_L1 {
+                // To fit all data in L1 cache, we split input in rounds.
+                let mut buf = match loc {
+                    SourceLocation::L2 => <DmaBuf<CORES, BUF_LEN>>::new_from_l2(source, l1_alloc),
+                    SourceLocation::Ram(device) => {
+                        <DmaBuf<CORES, BUF_LEN>>::new_from_ram(source, l1_alloc, device)
+                    }
+                    _ => panic!("unsupported"),
+                };
+                // If the cipher is producing the keystream in incremental blocks,
+                // it's extremely important for efficiency that round_buf_len / cores is a multiple of the block size
+                let round_buf_len = <DmaBuf<CORES, BUF_LEN>>::FULL_WORK_BUF_LEN;
+                let full_rounds = len / round_buf_len;
+                let base = core_id * (round_buf_len / CORES);
+                let mut past = 0;
+
+                for _ in 0..full_rounds {
+                    cipher.seek(base + past);
+                    cipher.apply_keystream_inout(buf.get_work_buf());
+                    past += round_buf_len;
+                    buf.advance();
                 }
-                _ => panic!("unsupported"),
-            };
-            // If the cipher is producing the keystream in incremental blocks,
-            // it's extremely important for efficiency that round_buf_len / cores is a multiple of the block size
-            let round_buf_len = <DmaBuf<CORES, BUF_LEN>>::FULL_WORK_BUF_LEN;
-            let full_rounds = len / round_buf_len;
-            let base = core_id * (round_buf_len / CORES);
-            let mut past = 0;
 
-            for _ in 0..full_rounds {
-                cipher.seek(base + past);
-                cipher.apply_keystream_inout(buf.get_work_buf());
-                past += round_buf_len;
-                buf.advance();
+                // handle remaining buffer
+                if len > past {
+                    cipher.seek(base + past);
+                    cipher.apply_keystream_inout(buf.get_work_buf());
+                    buf.advance();
+                }
+
+                buf.flush();
+            } else {
+                use cipher::inout::InOutBuf;
+                let core_len = (len + CORES - 1 ) / CORES;
+                let base = core_id * core_len / CORES;
+                cipher.seek(base);
+                cipher.apply_keystream_inout(
+                    InOutBuf::from_raw(source.ptr.add(base), source.ptr.add(base), core::cmp::min(core_len, len - base))
+                );
             }
-
-            // handle remaining buffer
-            if len > past {
-                cipher.seek(base + past);
-                cipher.apply_keystream_inout(buf.get_work_buf());
-                buf.advance();
-            }
-
-            buf.flush();
         }
     }
 }
@@ -143,7 +164,7 @@ impl<const BUF_LEN: usize> CoreData<BUF_LEN> {
             l1_alloc,
             key,
             iv,
-            loc
+            loc,
         }
     }
 }
