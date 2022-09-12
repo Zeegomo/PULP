@@ -1,6 +1,8 @@
 use core_alloc::boxed::Box;
 use crate::*;
 
+const DEFAULT_STACK_SIZE: usize = 2048;
+
 /// Using raw pointers means we can guarantee at the same time:
 /// * no special aliasing since the returned pointer will be used by the C code in ways we cannot predict
 /// * pinning
@@ -42,6 +44,7 @@ impl<const CORES: usize> Cluster<CORES> {
                 Self::execute_inner_pre_fork::<CORES, T>,
                 exec_fn_args as *mut _ as *mut cty::c_void,
             );
+            cluster_task.set_stack_size(DEFAULT_STACK_SIZE);
             pi_cluster_send_task_to_cl(self.device, &mut cluster_task);
             let _ = Box::from_raw_in(exec_fn_args, allocator);
         }

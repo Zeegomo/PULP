@@ -203,6 +203,11 @@ impl PiClusterTask {
             core_mask: 0,
         }
     }
+
+    pub fn set_stack_size(&mut self, size: usize) {
+        self.stack_size = size as u32;
+        self.slave_stack_size = size as u32;
+    }
 }
 
 // Opaque structsself.core_data.as_mut()
