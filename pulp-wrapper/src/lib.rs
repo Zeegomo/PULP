@@ -92,6 +92,7 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
             // If the cipher is producing the keystream in incremental blocks,
             // it's extremely important for efficiency that round_buf_len / cores is a multiple of the block size
             let round_buf_len = <DmaBuf<CORES, BUF_LEN>>::FULL_WORK_BUF_LEN;
+            debug_assert_eq!(round_buf_len % CORES, 0);
             let full_rounds = len / round_buf_len;
             let base = core_id * (round_buf_len / CORES);
             let mut past = 0;
