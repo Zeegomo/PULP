@@ -105,6 +105,7 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
 
             // handle remaining buffer
             if len > past {
+                let base = (((len - past) + CORES - 1) / CORES) * core_id;
                 cipher.seek(base + past);
                 cipher.apply_keystream_inout(buf.get_work_buf());
                 buf.advance();
