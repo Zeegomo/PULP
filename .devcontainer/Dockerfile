@@ -21,3 +21,5 @@ WORKDIR /opt/
 RUN bash -c "git clone https://github.com/pulp-platform/pulp-sdk && cd pulp-sdk && source configs/pulp-open.sh && make build"
 RUN echo "source /opt/pulp-sdk/configs/pulp-open.sh" >> /home/vscode/.bashrc
     
+RUN rustup toolchain add nightly-x86_64-unknown-linux-gnu
+RUN rustup +nightly target add riscv32imc-unknown-none-elf
