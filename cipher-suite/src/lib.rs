@@ -61,8 +61,8 @@ const fn parse_cores_u8(s: &str) -> usize {
 
 /// Initialize the cluster and the cluster wrapper wrapper in L2 memory
 #[no_mangle]
-pub extern "C" fn cluster_init() -> *mut cty::c_void {
-    let cluster = <Cluster<CORES>>::new().unwrap();
+pub extern "C" fn cluster_init(loc: *mut PiDevice) -> *mut cty::c_void {
+    let cluster = <Cluster<CORES>>::new_from_c(loc);
     let wrapper = Box::new_in(
         <PulpWrapper<CORES,CLUSTER_L1_BUFFER_LEN>>::new(cluster),
         pulp_sdk_rust::L2Allocator,

@@ -114,7 +114,7 @@ pub(crate) struct DmaBuf<'alloc, 'buf, 'source, const CORES: usize, const BUF_LE
 
 enum DmaTransfer {
     Ram {
-        req: PiClRamReq,
+        req: u32,
         _pin: PhantomPinned,
     },
     L2 {
@@ -136,7 +136,7 @@ impl DmaTransfer {
 
     pub fn new_ram(ram: NonNull<PiDevice>) -> Self {
         Self::Ram {
-            req: PiClRamReq::new(ram.as_ptr()),
+            req: 0,
             _pin: PhantomPinned,
         }
     }
@@ -144,7 +144,7 @@ impl DmaTransfer {
     unsafe fn transfer_in(&mut self, remote: *mut u8, l1: *mut u8, len: usize) {
         match self {
             Self::Ram { ref mut req, .. } => {
-                pi_cl_ram_read(req.device(), remote, l1, len, req);
+                todo!()
             }
             Self::L2 { ref mut cmd, .. } => {
                 pi_cl_dma_cmd(remote, l1, len, PiClDmaDirE::PI_CL_DMA_DIR_EXT2LOC, cmd);
@@ -155,7 +155,7 @@ impl DmaTransfer {
     unsafe fn transfer_out(&mut self, remote: *mut u8, l1: *mut u8, len: usize) {
         match self {
             Self::Ram { ref mut req, .. } => {
-                pi_cl_ram_write(req.device(), remote, l1, len, req);
+                todo!()
             }
             Self::L2 { ref mut cmd, .. } => {
                 pi_cl_dma_cmd(remote, l1, len, PiClDmaDirE::PI_CL_DMA_DIR_LOC2EXT, cmd);
@@ -167,8 +167,7 @@ impl DmaTransfer {
     // Safety: do not call on uninitialized requests
     unsafe fn wait(&mut self) {
         match self {
-            Self::Ram { ref mut req, .. } if req.is_in_transfer() => pi_cl_ram_read_wait(req),
-            Self::Ram { ref mut req, .. } => pi_cl_ram_write_wait(req),
+            Self::Ram { ref mut req, .. } => todo!(),
             Self::L2 { ref mut cmd, .. } => pi_cl_dma_wait(cmd),
         }
     }

@@ -41,7 +41,7 @@ void test(uint8_t* a,  uint8_t* b, uint8_t* c, uint32_t len);
     unsigned long _ldstall = 0; \
     unsigned long _imiss = 0; \
     for(int _k=0; _k<HOTTING+REPEAT; _k++) { \
-      pi_perf_conf((1<<PI_PERF_CYCLES) | (1<<PI_PERF_INSTR) | (1<<PI_PERF_ACTIVE_CYCLES) | (1<<PI_PERF_LD_EXT_CYC) | (1<<PI_PERF_ST_EXT_CYC) | (1<<PI_PERF_JR_STALL) | (1<<PI_PERF_TCDM_CONT) );
+      pi_perf_conf((1<<PI_PERF_CYCLES) | (1<<PI_PERF_INSTR) | (1<<PI_PERF_ACTIVE_CYCLES) | (1<<PI_PERF_LD) | (1<<PI_PERF_ST) | (1<<PI_PERF_JR_STALL) | (1<<PI_PERF_JR_STALL) );
 
 
 #define START_STATS()  \
@@ -55,10 +55,10 @@ void test(uint8_t* a,  uint8_t* b, uint8_t* c, uint32_t len);
         _cycles   += pi_perf_read (PI_PERF_CYCLES); \
         _instr    += pi_perf_read (PI_PERF_INSTR); \
     	_active   += pi_perf_read (PI_PERF_ACTIVE_CYCLES); \
-        _ld    += pi_perf_read (PI_PERF_LD_EXT_CYC); \
-        _st    += pi_perf_read (PI_PERF_ST_EXT_CYC); \
+        _ld    += pi_perf_read (PI_PERF_LD); \
+        _st    += pi_perf_read (PI_PERF_ST); \
     	_ldstall  += pi_perf_read (PI_PERF_JR_STALL); \
-        _imiss    += pi_perf_read (PI_PERF_TCDM_CONT); \
+        _imiss    += pi_perf_read (PI_PERF_JR_STALL); \
       }
 
 #define EXIT_STATS_LOOP()  \
@@ -72,10 +72,27 @@ void test(uint8_t* a,  uint8_t* b, uint8_t* c, uint32_t len);
     printf("[%d] I$ misses = %lu\n", 0, _imiss/REPEAT);
 
 
+static void cluster_entry(void *arg)
+{
+  encrypt(data, lennn[0], key, iv, arg, NULL, 0);  
+}
+
+
 int main()
 {
-  struct pi_hyperram_conf ram_conf;
-  void* wrapper = cluster_init();
+  pi_device_t* cluster_dev;
+  struct pi_cluster_conf conf;
+  struct pi_cluster_task cluster_task = {0};
+
+// open the cluster
+  pi_cluster_conf_init(&conf);
+  pi_open_from_conf(cluster_dev, &conf);
+  if (pi_cluster_open(cluster_dev))
+  {
+    printf("ERROR: Cluster not working\n");
+    return -1;
+  }
+  void* wrapper = cluster_init(cluster_dev);
 
   printf("%p\n", wrapper);
   if (wrapper == NULL) {
@@ -83,39 +100,12 @@ int main()
   }
 
   lennn[0] = LEN;
-  for(int i = 0; i < 32; i++){
-    key[i] = 0;
-  }
-  for(int j = 0; j < LEN; j++){
-    data[j] = 0;
-  }
 
   printf("iteration: %d\n", LEN);
-  INIT_STATS();
-
-  // executing the code multiple times to perform average statistics
-  ENTER_STATS_LOOP();
-  for(int i = 0; i < lennn[0]; i++){
-    data[i] = 0;
-  }
-  START_STATS();
-  encrypt(data, lennn[0], key, iv, wrapper, NULL, 0);
-  STOP_STATS();
-
-  // end of the performance statistics loop
-  EXIT_STATS_LOOP();
-  // encrypt_serial_orig(data3, i, key, iv);
-  
-    // for(int j = 0; j < i; j++){
-    //   if (data[j] !=data2[j] || data2[j] != data3[j] || data3[j] != data4[j]) {
-    //     for (int o = 0; o < 10; o++){
-    //       printf("wrong %d %d %d %d %d %d\n", i, j,  data[j+o], data2[j+o], data3[j+o], data4[j+o]);
-    //     }
-          
-    //       exit(1);
-    //   }
-    // }
-
+  pi_cluster_task(&cluster_task, cluster_entry, wrapper);
+  pi_cluster_send_task_to_cl(cluster_dev, &cluster_task);
+  printf("iteration: %d\n", LEN);
+    
   cluster_close(wrapper);
   return 0;
 }

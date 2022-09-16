@@ -12,25 +12,25 @@ extern "C" {
 
     pub fn pi_cl_dma_wait_wrap(copy: *mut cty::c_void);
 
-    pub fn pi_cl_ram_read_wait_wrap(req: *mut PiClRamReq);
+    // pub fn pi_cl_ram_read_wait_wrap(req: *mut PiClRamReq);
 
-    pub fn pi_cl_ram_write_wait_wrap(req: *mut PiClRamReq);
+    // pub fn pi_cl_ram_write_wait_wrap(req: *mut PiClRamReq);
 
-    pub fn pi_cl_ram_read_wrap(
-        device: *mut PiDevice,
-        pi_ram_addr: u32,
-        addr: *mut cty::c_void,
-        size: u32,
-        req: *mut PiClRamReq,
-    );
+    // pub fn pi_cl_ram_read_wrap(
+    //     device: *mut PiDevice,
+    //     pi_ram_addr: u32,
+    //     addr: *mut cty::c_void,
+    //     size: u32,
+    //     req: *mut PiClRamReq,
+    // );
 
-    pub fn pi_cl_ram_write_wrap(
-        device: *mut PiDevice,
-        pi_ram_addr: u32,
-        addr: *mut cty::c_void,
-        size: u32,
-        req: *mut PiClRamReq,
-    );
+    // pub fn pi_cl_ram_write_wrap(
+    //     device: *mut PiDevice,
+    //     pi_ram_addr: u32,
+    //     addr: *mut cty::c_void,
+    //     size: u32,
+    //     req: *mut PiClRamReq,
+    // );
 
     pub fn abort_all();
 
@@ -60,21 +60,21 @@ extern "C" {
 
     pub fn print_wrap(str: *const cty::c_char);
 
-    pub fn pi_cluster_task_wrap(
-        task: *mut PiClusterTask,
-        entry: extern "C" fn(arg: *mut cty::c_void),
-        arg: *mut cty::c_void,
-    ) -> *mut PiClusterTask;
+    // pub fn pi_cluster_task_wrap(
+    //     task: *mut PiClusterTask,
+    //     entry: extern "C" fn(arg: *mut cty::c_void),
+    //     arg: *mut cty::c_void,
+    // ) -> *mut PiClusterTask;
 
-    pub fn pi_cluster_send_task_to_cl(device: *mut PiDevice, task: *mut PiClusterTask) -> cty::c_int;
+    // pub fn pi_cluster_send_task_to_cl(device: *mut PiDevice, task: *mut PiClusterTask) -> cty::c_int;
 }
 
-pub unsafe fn pi_cluster_task(task: *mut PiClusterTask,
-    entry: extern "C" fn(arg: *mut cty::c_void),
-    arg: *mut cty::c_void,
-) -> *mut PiClusterTask {
-    pi_cluster_task_wrap(task, entry, arg)
-}
+// pub unsafe fn pi_cluster_task(task: *mut PiClusterTask,
+//     entry: extern "C" fn(arg: *mut cty::c_void),
+//     arg: *mut cty::c_void,
+// ) -> *mut PiClusterTask {
+//     pi_cluster_task_wrap(task, entry, arg)
+// }
 
 #[inline(always)]
 pub unsafe fn pi_core_id() -> usize {
@@ -103,45 +103,45 @@ pub fn pi_cl_dma_wait(copy: &mut PiClDmaCmd) {
     unsafe { pi_cl_dma_wait_wrap(copy as *mut PiClDmaCmd as *mut cty::c_void) }
 }
 
-pub fn pi_cl_ram_read_wait(req: &mut PiClRamReq) {
-    unsafe { pi_cl_ram_read_wait_wrap(req as *mut PiClRamReq) }
-}
+// pub fn pi_cl_ram_read_wait(req: &mut PiClRamReq) {
+//     unsafe { pi_cl_ram_read_wait_wrap(req as *mut PiClRamReq) }
+// }
 
-pub fn pi_cl_ram_write_wait(req: &mut PiClRamReq) {
-    unsafe { pi_cl_ram_write_wait_wrap(req as *mut PiClRamReq) }
-}
+// pub fn pi_cl_ram_write_wait(req: &mut PiClRamReq) {
+//     unsafe { pi_cl_ram_write_wait_wrap(req as *mut PiClRamReq) }
+// // }
 
-pub unsafe fn pi_cl_ram_read(
-    device: *mut PiDevice,
-    pi_ram_addr: *mut u8,
-    addr: *mut u8,
-    size: usize,
-    req: &mut PiClRamReq,
-) {
-    pi_cl_ram_read_wrap(
-        device,
-        pi_ram_addr as cty::uint32_t,
-        addr as *mut cty::c_void,
-        size as cty::uint32_t,
-        req as *mut PiClRamReq,
-    )
-}
+// pub unsafe fn pi_cl_ram_read(
+//     device: *mut PiDevice,
+//     pi_ram_addr: *mut u8,
+//     addr: *mut u8,
+//     size: usize,
+//     req: &mut PiClRamReq,
+// ) {
+//     pi_cl_ram_read_wrap(
+//         device,
+//         pi_ram_addr as cty::uint32_t,
+//         addr as *mut cty::c_void,
+//         size as cty::uint32_t,
+//         req as *mut PiClRamReq,
+//     )
+// }
 
-pub unsafe fn pi_cl_ram_write(
-    device: *mut PiDevice,
-    pi_ram_addr: *mut u8,
-    addr: *mut u8,
-    size: usize,
-    req: &mut PiClRamReq,
-) {
-    pi_cl_ram_write_wrap(
-        device,
-        pi_ram_addr as cty::uint32_t,
-        addr as *mut cty::c_void,
-        size as cty::uint32_t,
-        req as *mut PiClRamReq,
-    )
-}
+// pub unsafe fn pi_cl_ram_write(
+//     device: *mut PiDevice,
+//     pi_ram_addr: *mut u8,
+//     addr: *mut u8,
+//     size: usize,
+//     req: &mut PiClRamReq,
+// ) {
+//     pi_cl_ram_write_wrap(
+//         device,
+//         pi_ram_addr as cty::uint32_t,
+//         addr as *mut cty::c_void,
+//         size as cty::uint32_t,
+//         req as *mut PiClRamReq,
+//     )
+// }
 // TODO: compiler fence?
 pub fn pi_cl_team_barrier() {
     unsafe { pi_cl_team_barrier_wrap() }

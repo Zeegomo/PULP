@@ -56,11 +56,13 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
             iv.as_ptr(),
             loc,
         );
-        self.cluster.execute_fn_parallel(Self::entry_point::<C>, data);
+        use alloc::boxed::Box;
+        let data = Box::leak(Box::new_in(data , self.cluster.l1_allocator())) as *mut _ as *mut cty::c_void;
+        pi_cl_team_fork(CORES, Self::entry_point::<C>, data);
     }
 
     extern "C" fn entry_point<C: StreamCipher + StreamCipherSeek + KeyIvInit>(
-        data: &CoreData<BUF_LEN>,
+        data: *mut cty::c_void,
     ) {
         unsafe {
             let CoreData {
@@ -70,7 +72,7 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
                 len,
                 l1_alloc,
                 loc,
-            } = *data;
+            } = *(data as *mut CoreData<BUF_LEN>);
             let key = GenericArray::from_slice(core::slice::from_raw_parts(key, C::KeySize::USIZE));
             let iv = GenericArray::from_slice(core::slice::from_raw_parts(iv, C::IvSize::USIZE));
 
