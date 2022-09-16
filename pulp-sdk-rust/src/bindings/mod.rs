@@ -40,6 +40,8 @@ extern "C" {
         args: *mut cty::c_void,
     );
 
+    pub fn print_number(target: cty::c_int);
+
     pub fn pi_cl_team_barrier_wrap();
 
     pub fn pi_l2_malloc(size: cty::c_int) -> *mut cty::c_void;
@@ -79,8 +81,8 @@ pub unsafe fn pi_cluster_task(task: *mut PiClusterTask,
 #[inline(always)]
 pub unsafe fn pi_core_id() -> usize {
     let core_id: usize;
-    core::arch::asm!("csrr {core_id}, 0x014", core_id = out(reg) core_id,);
-    core_id & 0x01f
+    core::arch::asm!("csrr {core_id_reg}, 0xF14", core_id_reg = out(reg) core_id,);
+    core_id & 0xF
 }
 
 pub unsafe fn pi_cl_dma_cmd(

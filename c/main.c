@@ -22,6 +22,20 @@ void* cluster_init();
 
 void cluster_close(void* wrapper);
 
+
+/*
+ encrypt/dencrypt
+
+ data: puntatore al messaggio da cifrare
+ len: len del messaggio da cifrare
+ key: 32 Byte di chiave
+ iv: 12 Byte di chiave
+ wrapper: (rust_cluster_wrapper)
+ ram: Se data sta in hyperram devo passare il device (NULL se in L2)
+ cipher: 0 CHACHA20_OPT 1 CHACHA20_SW, 2 AES128-CTR
+
+
+*/
 void encrypt(char *data, size_t len, char *key, char *iv, void* wrapper, pi_device_t* ram, int cipher);
 
 void encrypt_serial_orig(char *data, size_t len, char *key, char *iv);

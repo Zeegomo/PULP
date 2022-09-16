@@ -10,6 +10,9 @@ use core::ptr::NonNull;
 use generic_array::GenericArray;
 use pulp_sdk_rust::{abort_all, GlobalAllocator, PiDevice, Cluster};
 use pulp_wrapper::{PulpWrapper, SourceLocation};
+use pulp_sdk_rust::{print_number};
+
+
 // This should not actually be used, as it's not clear from the context what the default allocation is
 #[global_allocator]
 static DEFAULT_ALLOCATOR: GlobalAllocator = GlobalAllocator;
@@ -44,7 +47,7 @@ macro_rules! extract_key_iv {
 }
 
 type Aes128Ctr = ctr::Ctr32LE<aes::Aes128>;
-const CLUSTER_L1_BUFFER_LEN: usize = 8192;
+const CLUSTER_L1_BUFFER_LEN: usize = 2048; //8192;
 const CORES: usize = parse_cores_u8(core::env!("CORES"));
 
 const fn parse_cores_u8(s: &str) -> usize {
@@ -87,6 +90,7 @@ pub unsafe extern "C" fn encrypt(
     ram_device: *mut PiDevice,
     cipher: Cipher,
 ) {
+    print_number(0);
     let wrapper = (wrapper as *mut PulpWrapper<CORES, CLUSTER_L1_BUFFER_LEN>)
         .as_mut()
         .unwrap();
@@ -96,14 +100,19 @@ pub unsafe extern "C" fn encrypt(
     } else {
         SourceLocation::L2
     };
+
+    print_number(1);
     match cipher {
         Cipher::ChaCha20 => {
             let (key, iv) = extract_key_iv!(chacha20_orig::ChaCha20, key, iv);
             wrapper.run::<chacha20_orig::ChaCha20>(data, key, iv, location)
         }
         Cipher::ChaCha20Pulp => {
+            print_number(2);
             let (key, iv) = extract_key_iv!(chacha20::ChaCha20, key, iv);
-            wrapper.run::<chacha20::ChaCha20>(data, key, iv, location)
+            print_number(3);
+            wrapper.run::<chacha20::ChaCha20>(data, key, iv, location);
+            print_number(4);
         }
         Cipher::Aes128Ctr => {
             let (key, iv) = extract_key_iv!(Aes128Ctr, key, iv);

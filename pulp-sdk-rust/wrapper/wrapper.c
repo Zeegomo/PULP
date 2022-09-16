@@ -55,3 +55,14 @@ void pi_cl_ram_write_wrap( 	struct pi_device *  	device,
 struct pi_cluster_task *pi_cluster_task_wrap(struct pi_cluster_task *task, void (*entry)(void*), void *arg) {
   return pi_cluster_task(task, entry, arg);
 }
+
+
+typedef enum {
+  LOG_TO_WIFI = 0,
+  LOG_TO_CRTP = 1
+} CPXConsoleTarget_t;
+
+extern void cpxPrintToConsole(CPXConsoleTarget_t target, const char * fmt, ...);
+void print_number(int n) {
+  cpxPrintToConsole(LOG_TO_CRTP, "RUST - %d\n", n);
+}

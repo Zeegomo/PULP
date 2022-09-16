@@ -63,6 +63,8 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
         data: &CoreData<BUF_LEN>,
     ) {
         unsafe {
+            if pi_core_id() == 0 { print_number(30); }
+
             let CoreData {
                 key,
                 iv,
@@ -73,7 +75,9 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
             } = *data;
             let key = GenericArray::from_slice(core::slice::from_raw_parts(key, C::KeySize::USIZE));
             let iv = GenericArray::from_slice(core::slice::from_raw_parts(iv, C::IvSize::USIZE));
-
+            
+            if pi_core_id() == 0 { print_number(31); }
+            
             // any lifetime will do as BufAlloc is owned by PulpWrapper
             let l1_alloc = &*l1_alloc;
             let source = SourcePtr::from_raw_parts(source, len);
@@ -89,6 +93,9 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
                 }
                 _ => panic!("unsupported"),
             };
+
+            if pi_core_id() == 0 { print_number(32); }
+
             // If the cipher is producing the keystream in incremental blocks,
             // it's extremely important for efficiency that round_buf_len / cores is a multiple of the block size
             let round_buf_len = <DmaBuf<CORES, BUF_LEN>>::FULL_WORK_BUF_LEN;
@@ -97,7 +104,9 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
             let base = core_id * (round_buf_len / CORES);
             let mut past = 0;
 
-            for _ in 0..full_rounds {
+            if pi_core_id() == 0 { print_number(33); }
+            for i in 0..full_rounds {
+                if pi_core_id() == 0 { print_number(100+i as i32); }
                 cipher.seek(base + past);
                 cipher.apply_keystream_inout(buf.get_work_buf());
                 past += round_buf_len;
