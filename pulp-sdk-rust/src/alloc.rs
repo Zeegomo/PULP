@@ -1,4 +1,4 @@
-use crate::{pi_cl_l1_free, pi_cl_l1_malloc, pi_l2_free, pi_l2_malloc, PiDevice};
+use crate::{pmsis_l1_free, pmsis_l1_malloc, pmsis_l2_free, pmsis_l2_malloc};
 use core::alloc::{AllocError, Allocator, GlobalAlloc, Layout};
 use core::ptr::NonNull;
 
@@ -15,14 +15,13 @@ unsafe impl Allocator for L2Allocator {
             // TODO: use pi_l2_malloc_align()
             return Err(AllocError);
         }
-        let ptr =
-            unsafe { pi_l2_malloc(layout.size().try_into().map_err(|_| AllocError)?) } as *mut u8;
+        let ptr = pmsis_l2_malloc(layout.size().try_into().map_err(|_| AllocError)?) as *mut u8;
         NonNull::new(ptr)
             .map(|ptr| NonNull::slice_from_raw_parts(ptr, layout.size()))
             .ok_or(AllocError)
     }
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        pi_l2_free(ptr.as_ptr() as *mut cty::c_void, layout.size() as i32);
+        pmsis_l2_free(ptr.as_ptr() as *mut cty::c_void, layout.size() as u32);
     }
 }
 
@@ -37,14 +36,12 @@ unsafe impl GlobalAlloc for GlobalAllocator {
 
 #[derive(Clone, Copy)]
 pub struct ClusterAllocator<'a> {
-    cluster: *mut PiDevice,
     _marker: core::marker::PhantomData<&'a u8>,
 }
 
 impl<'a> ClusterAllocator<'a> {
-    pub fn new(cluster: *mut PiDevice) -> Self {
+    pub fn new() -> Self {
         Self {
-            cluster,
             _marker: core::marker::PhantomData,
         }
     }
@@ -56,22 +53,14 @@ unsafe impl<'a> Allocator for ClusterAllocator<'a> {
             // TODO: use pi_l2_malloc_align()
             return Err(AllocError);
         }
-        let ptr = unsafe {
-            pi_cl_l1_malloc(
-                self.cluster,
-                layout.size().try_into().map_err(|_| AllocError)?,
-            )
-        } as *mut u8;
+        let ptr = unsafe { pmsis_l1_malloc(layout.size().try_into().map_err(|_| AllocError)?) }
+            as *mut u8;
         NonNull::new(ptr)
             .map(|ptr| NonNull::slice_from_raw_parts(ptr, layout.size()))
             .ok_or(AllocError)
     }
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
-        pi_cl_l1_free(
-            self.cluster,
-            ptr.as_ptr() as *mut cty::c_void,
-            layout.size() as i32,
-        );
+        pmsis_l1_free(ptr.as_ptr() as *mut cty::c_void, layout.size() as u32);
     }
 }
 

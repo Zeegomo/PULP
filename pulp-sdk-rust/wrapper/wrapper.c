@@ -51,7 +51,22 @@ void pi_cl_ram_write_wrap( 	struct pi_device *  	device,
   pi_cl_ram_write(device, pi_ram_addr, addr, size, req);
 }
 
-
 struct pi_cluster_task *pi_cluster_task_wrap(struct pi_cluster_task *task, void (*entry)(void*), void *arg) {
   return pi_cluster_task(task, entry, arg);
+}
+
+void* pmsis_l1_malloc_wrap(uint32_t size) {
+  return pmsis_l1_malloc(size);
+}
+
+void* pmsis_l2_malloc_wrap(uint32_t size) {
+  return pmsis_l2_malloc(size);
+}
+
+void* pmsis_l1_free_wrap(void *chunk, uint32_t size) {
+  return pmsis_l1_free(size);
+}
+
+void* pmsis_l2_free_wrap(void *chunk, uint32_t size) {
+  return pmsis_l2_free(size);
 }
