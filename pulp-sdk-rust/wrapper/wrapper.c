@@ -64,9 +64,9 @@ void* pmsis_l2_malloc_wrap(uint32_t size) {
 }
 
 void* pmsis_l1_free_wrap(void *chunk, uint32_t size) {
-  return pmsis_l1_malloc_free(size);
+  
 }
 
 void* pmsis_l2_free_wrap(void *chunk, uint32_t size) {
-  return pmsis_l2_malloc_free(size);
+  
 }

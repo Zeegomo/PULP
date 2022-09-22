@@ -4,6 +4,7 @@ use alloc::boxed::Box;
 use cipher::inout::InOutBuf;
 use core::marker::{PhantomData, PhantomPinned};
 use core::ptr::NonNull;
+use core::pin::Pin;
 
 // newtype around owned naked pointer to guarantee proper allocation and handling
 pub(crate) struct BufAlloc<'a, const BUF_LEN: usize> {
@@ -105,22 +106,16 @@ pub(crate) struct DmaBuf<'alloc, 'buf, 'source, const CORES: usize, const BUF_LE
     l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
     // how many rounds have been completed till now
     rounds: usize,
-    pre_fetch_dma: DmaTransfer,
-    commit_dma: DmaTransfer,
+    pre_fetch_dma: Pin<Box<DmaTransfer, L2Allocator>>,
+    commit_dma: Pin<Box<DmaTransfer, L2Allocator>>,
     counters: [usize; 3],
     last_transfer: usize,
     work_buf_len: usize,
 }
 
-enum DmaTransfer {
-    Ram {
-        req: u32,
-        _pin: PhantomPinned,
-    },
-    L2 {
-        cmd: PiClDmaCmd,
-        _pin: PhantomPinned,
-    },
+struct DmaTransfer {
+    cmd: PiClDmaCmd,
+    _pin: PhantomPinned
 }
 
 // TODO: ensure can't be unpinned
@@ -128,48 +123,30 @@ enum DmaTransfer {
 // but it will be necessary to make [DmaBuf] a public struct.
 impl DmaTransfer {
     pub fn new_l2() -> Self {
-        Self::L2 {
+        Self {
             cmd: PiClDmaCmd::new(),
             _pin: PhantomPinned,
         }
     }
 
-    pub fn new_ram(ram: NonNull<PiDevice>) -> Self {
-        Self::Ram {
-            req: 0,
-            _pin: PhantomPinned,
-        }
+    #[allow(dead_code)]
+    pub fn new_ram(_ram: NonNull<PiDevice>) -> Self {
+        unimplemented!()
     }
 
-    unsafe fn transfer_in(&mut self, remote: *mut u8, l1: *mut u8, len: usize) {
-        match self {
-            Self::Ram { ref mut req, .. } => {
-                todo!()
-            }
-            Self::L2 { ref mut cmd, .. } => {
-                pi_cl_dma_cmd(remote, l1, len, PiClDmaDirE::PI_CL_DMA_DIR_EXT2LOC, cmd);
-            }
-        }
+    unsafe fn transfer_in(self: Pin<&mut Self>, remote: *mut u8, l1: *mut u8, len: usize) {
+        pi_cl_dma_cmd(remote, l1, len, PiClDmaDirE::PI_CL_DMA_DIR_EXT2LOC, &mut self.get_unchecked_mut().cmd);
+       
     }
 
-    unsafe fn transfer_out(&mut self, remote: *mut u8, l1: *mut u8, len: usize) {
-        match self {
-            Self::Ram { ref mut req, .. } => {
-                todo!()
-            }
-            Self::L2 { ref mut cmd, .. } => {
-                pi_cl_dma_cmd(remote, l1, len, PiClDmaDirE::PI_CL_DMA_DIR_LOC2EXT, cmd);
-            }
-        }
+    unsafe fn transfer_out(self: Pin<&mut Self>, remote: *mut u8, l1: *mut u8, len: usize) {
+        pi_cl_dma_cmd(remote, l1, len, PiClDmaDirE::PI_CL_DMA_DIR_LOC2EXT, &mut self.get_unchecked_mut().cmd);
     }
 
     // TODO typestate
     // Safety: do not call on uninitialized requests
-    unsafe fn wait(&mut self) {
-        match self {
-            Self::Ram { ref mut req, .. } => todo!(),
-            Self::L2 { ref mut cmd, .. } => pi_cl_dma_wait(cmd),
-        }
+    unsafe fn wait(self: Pin<&mut Self>) {
+        pi_cl_dma_wait(&mut self.get_unchecked_mut().cmd)
     }
 }
 
@@ -181,16 +158,16 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     fn common(
         source: SourcePtr<'source>,
         l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
-        mut pre_fetch_dma: DmaTransfer,
-        commit_dma: DmaTransfer,
+        mut pre_fetch_dma: Pin<Box<DmaTransfer, L2Allocator>>,
+        commit_dma: Pin<Box<DmaTransfer, L2Allocator>>,
     ) -> Self {
         assert_eq!(BUF_LEN % CORES, 0);
         unsafe {
             let size = core::cmp::min(BUF_LEN * 2, source.len);
             // initialize first buffer
             if pi_core_id() == 0 {
-                pre_fetch_dma.transfer_in(source.ptr, l1_alloc.buf, size);
-                pre_fetch_dma.wait();
+                pre_fetch_dma.as_mut().transfer_in(source.ptr, l1_alloc.buf, size);
+                pre_fetch_dma.as_mut().wait();
             }
             pi_cl_team_barrier();
         }
@@ -215,16 +192,11 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     /// Safety:
     /// * should only be called from within a PULP cluster
     pub fn new_from_ram(
-        source: SourcePtr<'source>,
-        l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
-        device: NonNull<PiDevice>,
+        _source: SourcePtr<'source>,
+        _l1_alloc: &'buf BufAlloc<'alloc, BUF_LEN>,
+        _device: NonNull<PiDevice>,
     ) -> Self {
-        Self::common(
-            source,
-            l1_alloc,
-            DmaTransfer::new_ram(device),
-            DmaTransfer::new_ram(device),
-        )
+        unimplemented!()
     }
 
     /// Build a new managed L1 cluster buffer backing a L2 memory allocation
@@ -238,8 +210,8 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
         Self::common(
             source,
             l1_alloc,
-            DmaTransfer::new_l2(),
-            DmaTransfer::new_l2(),
+            Box::pin_in(DmaTransfer::new_l2(), L2Allocator),
+            Box::pin_in(DmaTransfer::new_l2(), L2Allocator),
         )
     }
 
@@ -262,16 +234,16 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
             if pi_core_id() == 0 {
                 if self.rounds > 1 {
                     // wait dma completed on commit buf before using it as pre-fetch (should not actually wait in practice)
-                    self.commit_dma.wait();
+                    self.commit_dma.as_mut().wait();
                     // wait dma completed on current work buf
-                    self.pre_fetch_dma.wait();
+                    self.pre_fetch_dma.as_mut().wait();
                 }
 
                 pi_cl_team_barrier();
 
                 // start dma out (commit)
                 let commit_buf_ptr = self.get_commit_buf_ptr();
-                self.commit_dma.transfer_out(
+                self.commit_dma.as_mut().transfer_out(
                     self.source.ptr.add((self.rounds - 1) * BUF_LEN),
                     commit_buf_ptr,
                     self.work_buf_len,
@@ -280,7 +252,7 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
                 if offset < self.source.len {
                     // start dma in (pre-fetch)
                     let pre_fetch_buf_ptr = self.get_pre_fetch_buf_ptr();
-                    self.pre_fetch_dma.transfer_in(
+                    self.pre_fetch_dma.as_mut().transfer_in(
                         self.source.ptr.add(offset),
                         pre_fetch_buf_ptr,
                         size,
@@ -303,7 +275,7 @@ impl<'alloc, 'buf, 'source, const CORES: usize, const BUF_LEN: usize>
     /// * must be called after having called advance() at least once
     pub unsafe fn flush(&mut self) {
         if pi_core_id() == 0 {
-            self.commit_dma.wait();
+            self.commit_dma.as_mut().wait();
         }
         pi_cl_team_barrier();
     }
