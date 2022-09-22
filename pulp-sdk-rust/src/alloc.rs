@@ -58,7 +58,7 @@ unsafe impl<'a> Allocator for ClusterAllocator<'a> {
         }
         let ptr = unsafe {
             pi_cl_l1_malloc(
-                self.cluster,
+                core::ptr::null_mut(), //self.cluster,
                 layout.size().try_into().map_err(|_| AllocError)?,
             )
         } as *mut u8;
@@ -68,7 +68,7 @@ unsafe impl<'a> Allocator for ClusterAllocator<'a> {
     }
     unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
         pi_cl_l1_free(
-            self.cluster,
+            core::ptr::null_mut(), //self.cluster,
             ptr.as_ptr() as *mut cty::c_void,
             layout.size() as i32,
         );

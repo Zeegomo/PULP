@@ -5,9 +5,9 @@
 
 #define HOTTING 1
 #define REPEAT  3
-#define STACK_SIZE      2048
-#define LEN             (131072)
-#define BUF_LEN             (14336*3)
+#define STACK_SIZE 2048
+#define LEN (131072)
+#define BUF_LEN (14336*3)
 
 
 PI_L2 char data[LEN];
@@ -18,13 +18,14 @@ PI_L2 int lennn[1];
 PI_L2 struct pi_device ram;
 PI_L2 uint32_t ram_ptr;
 
-void* cluster_init();
 
-void cluster_close(void* wrapper);
+extern void *cluster_init();
 
-void encrypt(char *data, size_t len, char *key, char *iv, void* wrapper, pi_device_t* ram, int cipher);
+extern void cluster_close(void* wrapper);
 
-void encrypt_serial_orig(char *data, size_t len, char *key, char *iv);
+extern void encrypt(char *data, size_t len, char *key, char *iv, void* wrapper, pi_device_t* ram, int cipher);
+
+extern void encrypt_serial_orig(char *data, size_t len, char *key, char *iv);
 
 void test(uint8_t* a,  uint8_t* b, uint8_t* c, uint32_t len);
 
@@ -80,19 +81,19 @@ static void cluster_entry(void *arg)
 
 int main()
 {
-  pi_device_t* cluster_dev;
+  pi_device_t cluster_dev;
   struct pi_cluster_conf conf;
   struct pi_cluster_task cluster_task = {0};
 
 // open the cluster
   pi_cluster_conf_init(&conf);
-  pi_open_from_conf(cluster_dev, &conf);
-  if (pi_cluster_open(cluster_dev))
+  pi_open_from_conf(&cluster_dev, &conf);
+  if (pi_cluster_open(&cluster_dev))
   {
     printf("ERROR: Cluster not working\n");
     return -1;
   }
-  void* wrapper = cluster_init(cluster_dev);
+  void* wrapper = cluster_init(&cluster_dev);
 
   printf("%p\n", wrapper);
   if (wrapper == NULL) {
@@ -103,7 +104,7 @@ int main()
 
   printf("iteration: %d\n", LEN);
   pi_cluster_task(&cluster_task, cluster_entry, wrapper);
-  pi_cluster_send_task_to_cl(cluster_dev, &cluster_task);
+  pi_cluster_send_task_to_cl(&cluster_dev, &cluster_task);
   printf("iteration: %d\n", LEN);
     
   cluster_close(wrapper);

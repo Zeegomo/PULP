@@ -1,14 +1,17 @@
 CORES ?= 8
 rust_lib:
-	CORES=${CORES}  cargo +nightly build --manifest-path ../cipher-suite/Cargo.toml --target riscv32imc-unknown-none-elf --no-default-features --release
-	cd ../target/riscv32imc-unknown-none-elf/release && ar x libcipher_suite.a
+	cargo clean
+	CORES=${CORES} cargo +nightly build --manifest-path ../cipher-suite/Cargo.toml --target riscv32imc-unknown-none-elf --no-default-features
+	cd ../target/riscv32imc-unknown-none-elf/debug && ar x libcipher_suite.a
 
 # COMPILER FLAGS
-APP_CFLAGS += -O3 -g3 -DNUM_CORES=${CORES}
+APP_CFLAGS += -O3 -DNUM_CORES=${CORES}
+
+PMSIS_OS = freertos
 
 APP = main
 APP_SRCS	+= main.c 
-APP_LDFLAGS = ../target/riscv32imc-unknown-none-elf/release/*.o 
+APP_LDFLAGS = ../target/riscv32imc-unknown-none-elf/debug/*.o 
 
 CONFIG_HYPERRAM = 1
 

@@ -23,6 +23,17 @@ pub struct PulpWrapper<const CORES: usize, const BUF_LEN: usize> {
     cluster_buffer: BufAlloc<'static, BUF_LEN>,
 }
 
+// pub extern "C" fn cluster_work_fake(data: *mut cty::c_void) {
+//     cluster_work(core::ptr::null_mut() as *mut cty::c_void);
+// }
+
+
+// pub extern "C" fn cluster_work(data: *mut cty::c_void) {
+//     unsafe{ 
+//         let core_id = pi_core_id(); 
+//     }
+// }
+
 impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
     /// Initialize the wrapper and allocates necessary buffers in the cluster.
     /// This is to reuse allocations across calls to [run].
@@ -58,7 +69,9 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
         );
         use alloc::boxed::Box;
         let data = Box::leak(Box::new_in(data , self.cluster.l1_allocator())) as *mut _ as *mut cty::c_void;
+        let core_id = pi_core_id();
         pi_cl_team_fork(CORES, Self::entry_point::<C>, data);
+        // pi_cl_team_fork_wrap(8, cluster_work, core::ptr::null_mut());
     }
 
     extern "C" fn entry_point<C: StreamCipher + StreamCipherSeek + KeyIvInit>(
@@ -78,43 +91,53 @@ impl<const CORES: usize, const BUF_LEN: usize> PulpWrapper<CORES, BUF_LEN> {
 
             // any lifetime will do as BufAlloc is owned by PulpWrapper
             let l1_alloc = &*l1_alloc;
-            let source = SourcePtr::from_raw_parts(source, len);
+            // let source = SourcePtr::from_raw_parts(source, len);
 
             let mut cipher = C::new(key, iv);
             let core_id = pi_core_id();
 
-            // To fit all data in L1 cache, we split input in rounds.
-            let mut buf = match loc {
-                SourceLocation::L2 => <DmaBuf<CORES, BUF_LEN>>::new_from_l2(source, l1_alloc),
-                SourceLocation::Ram(device) => {
-                    <DmaBuf<CORES, BUF_LEN>>::new_from_ram(source, l1_alloc, device)
-                }
-                _ => panic!("unsupported"),
-            };
-            // If the cipher is producing the keystream in incremental blocks,
-            // it's extremely important for efficiency that round_buf_len / cores is a multiple of the block size
-            let round_buf_len = <DmaBuf<CORES, BUF_LEN>>::FULL_WORK_BUF_LEN;
-            debug_assert_eq!(round_buf_len % CORES, 0);
-            let full_rounds = len / round_buf_len;
-            let base = core_id * (round_buf_len / CORES);
-            let mut past = 0;
+            
+            let slice = core::slice::from_raw_parts_mut(source.add(core_id*9882), 9882);
+            cipher.seek(0);
+            cipher.apply_keystream(slice);
 
-            for _ in 0..full_rounds {
-                cipher.seek(base + past);
-                cipher.apply_keystream_inout(buf.get_work_buf());
-                past += round_buf_len;
-                buf.advance();
-            }
+            // for i in 0..10 {
+            //     slice[i] = 0xFF-(i as u8 * 10);
+            // }
 
-            // handle remaining buffer
-            if len > past {
-                let base = (((len - past) + CORES - 1) / CORES) * core_id;
-                cipher.seek(base + past);
-                cipher.apply_keystream_inout(buf.get_work_buf());
-                buf.advance();
-            }
+            // // To fit all data in L1 cache, we split input in rounds.
+            // let mut buf = match loc {
+            //     SourceLocation::L2 => <DmaBuf<CORES, BUF_LEN>>::new_from_l2(source, l1_alloc),
+            //     SourceLocation::Ram(device) => {
+            //         <DmaBuf<CORES, BUF_LEN>>::new_from_ram(source, l1_alloc, device)
+            //     }
+            //     _ => panic!("unsupported"),
+            // };
 
-            buf.flush();
+            // // If the cipher is producing the keystream in incremental blocks,
+            // // it's extremely important for efficiency that round_buf_len / cores is a multiple of the block size
+            // let round_buf_len = <DmaBuf<CORES, BUF_LEN>>::FULL_WORK_BUF_LEN;
+            // debug_assert_eq!(round_buf_len % CORES, 0);
+            // let full_rounds = len / round_buf_len;
+            // let base = core_id * (round_buf_len / CORES);
+            // let mut past = 0;
+
+            // for _ in 0..full_rounds {
+            //     cipher.seek(base + past);
+            //     cipher.apply_keystream_inout(buf.get_work_buf());
+            //     past += round_buf_len;
+            //     buf.advance();
+            // }
+
+            // // handle remaining buffer
+            // if len > past {
+            //     let base = (((len - past) + CORES - 1) / CORES) * core_id;
+            //     cipher.seek(base + past);
+            //     cipher.apply_keystream_inout(buf.get_work_buf());
+            //     buf.advance();
+            // }
+
+            // buf.flush();
         }
     }
 }

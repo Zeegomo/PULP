@@ -60,6 +60,8 @@ extern "C" {
 
     pub fn print_wrap(str: *const cty::c_char);
 
+    pub fn pi_core_id_wrap() -> cty::c_int;
+
     // pub fn pi_cluster_task_wrap(
     //     task: *mut PiClusterTask,
     //     entry: extern "C" fn(arg: *mut cty::c_void),
@@ -78,9 +80,10 @@ extern "C" {
 
 #[inline(always)]
 pub unsafe fn pi_core_id() -> usize {
-    let core_id: usize;
-    core::arch::asm!("csrr {core_id}, 0x014", core_id = out(reg) core_id,);
-    core_id & 0x01f
+    // let core_id: usize;
+    // core::arch::asm!("csrr {core_id}, 0x014", core_id = out(reg) core_id,);
+    // core_id & 0x01f
+    pi_core_id_wrap() as usize
 }
 
 pub unsafe fn pi_cl_dma_cmd(
