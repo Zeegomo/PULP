@@ -42,13 +42,17 @@ extern "C" {
 
     pub fn pi_cl_team_barrier_wrap();
 
-    pub fn pi_l2_malloc(size: cty::c_int) -> *mut cty::c_void;
+    // pub fn pi_l2_malloc(size: cty::c_int) -> *mut cty::c_void;
+    pub fn pmsis_l2_malloc_wrap(size: cty::uint32_t) -> *mut cty::c_void;
 
-    pub fn pi_l2_free(chunk: *mut cty::c_void, size: cty::c_int);
+    // pub fn pi_l2_free(chunk: *mut cty::c_void, size: cty::c_int);
+    pub fn pmsis_l2_free_wrap(chunk: *mut cty::c_void, size: cty::uint32_t);
 
-    pub fn pi_cl_l1_malloc(cluster: *mut PiDevice, size: cty::c_int) -> *mut cty::c_void;
+    // pub fn pi_cl_l1_malloc(cluster: *mut PiDevice, size: cty::c_int) -> *mut cty::c_void;
+    pub fn pmsis_l1_malloc_wrap(size: cty::uint32_t) -> *mut cty::c_void;
 
-    pub fn pi_cl_l1_free(cluster: *mut PiDevice, chunk: *mut cty::c_void, size: cty::c_int);
+    // pub fn pi_cl_l1_free(cluster: *mut PiDevice, chunk: *mut cty::c_void, size: cty::c_int);
+    pub fn pmsis_l1_free_wrap(chunk: *mut cty::c_void, size: cty::uint32_t);
 
     pub fn rotate_right_wrap(x: cty::c_int, r: cty::c_int) -> cty::c_int;
 
@@ -77,6 +81,22 @@ extern "C" {
 // ) -> *mut PiClusterTask {
 //     pi_cluster_task_wrap(task, entry, arg)
 // }
+
+pub fn pmsis_l1_malloc(size: u32) -> *mut cty::c_void {
+    unsafe { pmsis_l1_malloc_wrap(size) }
+}
+
+pub fn pmsis_l2_malloc(size: u32) -> *mut cty::c_void {
+    unsafe { pmsis_l2_malloc_wrap(size) }
+}
+
+pub unsafe fn pmsis_l1_free(chunk: *mut cty::c_void, size: u32) {
+    pmsis_l1_free_wrap(chunk, size)
+}
+
+pub unsafe fn pmsis_l2_free(chunk: *mut cty::c_void, size: u32) {
+    pmsis_l2_free_wrap(chunk, size)
+}
 
 #[inline(always)]
 pub unsafe fn pi_core_id() -> usize {

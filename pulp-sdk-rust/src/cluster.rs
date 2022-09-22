@@ -1,5 +1,5 @@
-use core_alloc::boxed::Box;
 use crate::*;
+use core_alloc::boxed::Box;
 
 const DEFAULT_STACK_SIZE: usize = 2048;
 
@@ -30,13 +30,14 @@ impl<const CORES: usize> Cluster<CORES> {
     pub fn new_from_c(device: *mut PiDevice) -> Self {
         Self {
             device,
-            _conf: core::ptr::null_mut() as * mut PiClusterConf
+            _conf: core::ptr::null_mut() as *mut PiClusterConf,
         }
     }
 
     /// Returns an allocator that uses the cluster L1 memory
     pub fn l1_allocator(&self) -> ClusterAllocator {
-        ClusterAllocator::new(self.device)
+        // ClusterAllocator::new(self.device)
+        ClusterAllocator::new()
     }
 
     // Schedule a function for execution on each cluster core.
@@ -72,7 +73,7 @@ impl<const CORES: usize> Cluster<CORES> {
     }
 }
 
-impl<const CORES:usize> Drop for Cluster<CORES> {
+impl<const CORES: usize> Drop for Cluster<CORES> {
     fn drop(&mut self) {
         // TODO
     }

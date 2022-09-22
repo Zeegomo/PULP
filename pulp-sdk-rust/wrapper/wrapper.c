@@ -1,6 +1,6 @@
 // Wrapper for some function declared as static in header files in the pulp-sdk
 #include "stdint.h"
-#include "pmsis.h"
+#include <pmsis.h>
 #include <bsp/bsp.h>
 
 
@@ -15,7 +15,7 @@ void pi_cl_team_barrier_wrap()
 }
 
 void pi_cl_dma_cmd_wrap(uint32_t ext, uint32_t loc, uint32_t size, pi_cl_dma_dir_e dir, pi_cl_dma_cmd_t *cmd) {
-    pi_cl_dma_cmd(ext, loc, size, dir, cmd);
+    pi_cl_dma_cmd(ext, loc,size,dir, cmd);
 }
 
 void abort_all(){
@@ -52,11 +52,33 @@ void pi_cl_ram_write_wrap( 	struct pi_device *  	device,
   pi_cl_ram_write(device, pi_ram_addr, addr, size, req);
 }
 
+struct pi_cluster_task *pi_cluster_task_wrap(
+    struct pi_cluster_task *task, 
+    void (*entry)(void*), 
+    void *arg) {
+
+  return pi_cluster_task(task, entry, arg);
+}
+
+void* pmsis_l1_malloc_wrap(uint32_t size) {
+  return pmsis_l1_malloc(size);
+  // return pi_cl_l1_malloc((void *) 0, size);
+}
+
+void* pmsis_l2_malloc_wrap(uint32_t size) {
+  return pmsis_l2_malloc(size);
+}
+
+void* pmsis_l1_free_wrap(void *chunk, uint32_t size) {
+  // return pmsis_l1_malloc_free(chunk);
+  return NULL;
+}
+
+void* pmsis_l2_free_wrap(void *chunk, uint32_t size) {
+  // return pmsis_l2_malloc_free(chunk);
+  return NULL;
+}
 
 int pi_core_id_wrap() {
   return pi_core_id();
-}
-
-struct pi_cluster_task *pi_cluster_task_wrap(struct pi_cluster_task *task, void (*entry)(void*), void *arg) {
-  return pi_cluster_task(task, entry, arg);
 }
