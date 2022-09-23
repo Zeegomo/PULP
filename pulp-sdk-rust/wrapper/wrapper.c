@@ -60,25 +60,46 @@ struct pi_cluster_task *pi_cluster_task_wrap(
   return pi_cluster_task(task, entry, arg);
 }
 
-void* pmsis_l1_malloc_wrap(uint32_t size) {
+// L1
+void *pmsis_l1_malloc_wrap(uint32_t size) {
   return pmsis_l1_malloc(size);
   // return pi_cl_l1_malloc((void *) 0, size);
 }
 
-void* pmsis_l2_malloc_wrap(uint32_t size) {
+void pmsis_l1_free_wrap(void *chunk, uint32_t size) {
+  // return pmsis_l1_malloc_free(chunk);
+  return;
+}
+
+// L2
+void *pmsis_l2_malloc_wrap(uint32_t size) {
   return pmsis_l2_malloc(size);
 }
 
-void* pmsis_l1_free_wrap(void *chunk, uint32_t size) {
-  // return pmsis_l1_malloc_free(chunk);
-  return NULL;
-}
-
-void* pmsis_l2_free_wrap(void *chunk, uint32_t size) {
+void pmsis_l2_free_wrap(void *chunk, uint32_t size) {
   // return pmsis_l2_malloc_free(chunk);
-  return NULL;
+  return;
 }
 
 int pi_core_id_wrap() {
   return pi_core_id();
+}
+
+void led_turn_on() {
+  // #define LED_PIN 2
+  // Open Led
+  static pi_device_t led_gpio_dev;  
+  // Initialize the LED pin
+  pi_gpio_pin_configure(&led_gpio_dev, 2, PI_GPIO_OUTPUT);
+  pi_gpio_pin_write(&led_gpio_dev, 2, 1);
+
+}
+
+void led_turn_off() {
+  // #define LED_PIN 2
+  // Open Led
+  static pi_device_t led_gpio_dev;
+  // Initialize the LED pin
+  pi_gpio_pin_configure(&led_gpio_dev, 2, PI_GPIO_OUTPUT);
+  pi_gpio_pin_write(&led_gpio_dev, 2, 0);
 }

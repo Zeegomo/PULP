@@ -66,6 +66,9 @@ extern "C" {
 
     pub fn pi_core_id_wrap() -> cty::c_int;
 
+    pub fn led_turn_on();
+    pub fn led_turn_off();
+
     // pub fn pi_cluster_task_wrap(
     //     task: *mut PiClusterTask,
     //     entry: extern "C" fn(arg: *mut cty::c_void),
@@ -91,11 +94,11 @@ pub fn pmsis_l2_malloc(size: u32) -> *mut cty::c_void {
 }
 
 pub unsafe fn pmsis_l1_free(chunk: *mut cty::c_void, size: u32) {
-    pmsis_l1_free_wrap(chunk, size)
+    pmsis_l1_free_wrap(chunk, size);
 }
 
 pub unsafe fn pmsis_l2_free(chunk: *mut cty::c_void, size: u32) {
-    pmsis_l2_free_wrap(chunk, size)
+    pmsis_l2_free_wrap(chunk, size);
 }
 
 #[inline(always)]

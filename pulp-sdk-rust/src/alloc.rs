@@ -2,6 +2,7 @@
 use crate::{pmsis_l1_free, pmsis_l1_malloc, pmsis_l2_free, pmsis_l2_malloc};
 use core::alloc::{AllocError, Allocator, GlobalAlloc, Layout};
 use core::ptr::NonNull;
+use crate::*;
 
 const L2_ALIGN: usize = 4;
 const CLUSTER_L1_ALIGN: usize = 4;
@@ -66,9 +67,9 @@ unsafe impl<'a> Allocator for ClusterAllocator<'a> {
         //         layout.size().try_into().map_err(|_| AllocError)?,
         //     )
         // } as *mut u8;
-        let ptr = unsafe { pmsis_l1_malloc(layout.size().try_into().map_err(|_| AllocError)?) }
-            as *mut u8;
-
+        // let ptr = unsafe { pmsis_l1_malloc(layout.size().try_into().map_err(|_| AllocError)?) }
+        //     as *mut u8;
+        let ptr = pmsis_l1_malloc(layout.size().try_into().map_err(|_| AllocError)?) as *mut u8;
         NonNull::new(ptr)
             .map(|ptr| NonNull::slice_from_raw_parts(ptr, layout.size()))
             .ok_or(AllocError)
@@ -87,7 +88,10 @@ unsafe impl<'a> Allocator for ClusterAllocator<'a> {
 #[alloc_error_handler]
 fn abort_on_alloc_err(_: core::alloc::Layout) -> ! {
     unsafe {
+        led_turn_off();
         crate::abort_all();
     }
     loop {}
 }
+
+

@@ -44,7 +44,7 @@ macro_rules! extract_key_iv {
 }
 
 type Aes128Ctr = ctr::Ctr32LE<aes::Aes128>;
-const CLUSTER_L1_BUFFER_LEN: usize = 8192;
+const CLUSTER_L1_BUFFER_LEN: usize = 512*4;
 const CORES: usize = parse_cores_u8(core::env!("CORES"));
 
 const fn parse_cores_u8(s: &str) -> usize {
@@ -77,6 +77,41 @@ pub extern "C" fn cluster_init(loc: *mut PiDevice) -> *mut cty::c_void {
 /// * key must be valid to read for: 32 bytes
 /// * iv must be valid to read for 12 bytes
 /// * wrapper must be a valid pointer to an initialized PULP Wrapper allocated by this library
+// #[no_mangle]
+// pub unsafe extern "C" fn encrypt(
+//     data: *mut u8,
+//     len: usize,
+//     key: *const u8,
+//     iv: *const u8,
+//     wrapper: *mut cty::c_void,
+//     ram_device: *mut PiDevice,
+//     cipher: Cipher,
+// ) {
+//     let wrapper = (wrapper as *mut PulpWrapper<CORES, CLUSTER_L1_BUFFER_LEN>)
+//         .as_mut()
+//         .unwrap();
+//     let data = core::slice::from_raw_parts_mut(data, len);
+//     let location = if let Some(device) = NonNull::new(ram_device) {
+//         SourceLocation::Ram(device)
+//     } else {
+//         SourceLocation::L2
+//     };
+//     match cipher {
+//         Cipher::ChaCha20 => {
+//             let (key, iv) = extract_key_iv!(chacha20_orig::ChaCha20, key, iv);
+//             wrapper.run::<chacha20_orig::ChaCha20>(data, key, iv, location)
+//         }
+//         Cipher::ChaCha20Pulp => {
+//             let (key, iv) = extract_key_iv!(chacha20::ChaCha20, key, iv);
+//             wrapper.run::<chacha20::ChaCha20>(data, key, iv, location)
+//         }
+//         Cipher::Aes128Ctr => {
+//             let (key, iv) = extract_key_iv!(Aes128Ctr, key, iv);
+//             wrapper.run::<Aes128Ctr>(data, key, iv, location)
+//         }
+//     }
+// }
+
 #[no_mangle]
 pub unsafe extern "C" fn encrypt(
     data: *mut u8,
@@ -90,12 +125,9 @@ pub unsafe extern "C" fn encrypt(
     let wrapper = (wrapper as *mut PulpWrapper<CORES, CLUSTER_L1_BUFFER_LEN>)
         .as_mut()
         .unwrap();
+
     let data = core::slice::from_raw_parts_mut(data, len);
-    let location = if let Some(device) = NonNull::new(ram_device) {
-        SourceLocation::Ram(device)
-    } else {
-        SourceLocation::L2
-    };
+    let location = SourceLocation::L2;
     match cipher {
         Cipher::ChaCha20 => {
             let (key, iv) = extract_key_iv!(chacha20_orig::ChaCha20, key, iv);
